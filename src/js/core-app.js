@@ -1,12 +1,17 @@
+var cron = require('cron').CronJob;
+var ipfs = require('ipfs');
 var request = require('request');
 
 var coreApp = function (options) {
   var app = options.app;
+  
+  var node = new ipfs();
 
-  var ROUND_TIME = 1;
+  var ROUND_TIME = 1; /* Expressed in seconds */
 
-  var transactions = [];
+  var peers = [];
   var chain = [];
+  var transactions = [];
 
   /* SGX */
   var sgxInternalCounter = 1;
@@ -50,6 +55,14 @@ var coreApp = function (options) {
       hash = hash & hash; // Convert to 32bit integer
     }
     return hash;
+  }
+
+  function validTransaction(tx) {
+    if (tx === null || tx === undefined) return false;
+    else if (tx.inputs === null || tx.inputs === undefined) return false;
+    else if (tx.outputs === null || tx.outputs === undefined) return false;
+    else if (tx.timestamp === null || tx.timestamp === undefined) return false;
+    else return true;
   }
 
 /********************************** BLOCK ************************************/
@@ -240,6 +253,50 @@ var coreApp = function (options) {
     return true;
   }
 
+/********************************** NETWORK **********************************/
+
+  function storeAndBroadcastTransaction(tx) {
+    node.object.put(tx, function(err, res) {
+      if (err) console.log(err);
+      else {
+        res = res.toJSON();
+        tx = {
+          key: res.Hash,
+          data: res.Data,
+          links: res.Links,
+          size: res.Size
+        };
+        transactions.push(tx);
+        console.log('Storing transaction: ' + JSON.stringify(tx));
+        for (var i = 0; i < peers.length; i++) {
+          var peer = peers[i];
+          console.log('Broadcasting transaction to peer: ' + peer);
+          // Todo: peer.broadcastTransaction(tx);
+        }
+      }
+    });
+  }
+
+  function broadcastChain(chain) {
+    for (var i = 0; i < peers.length; i++) {
+      var peer = peers[i];
+      console.log('Broadcasting chain to peer: ' + peer);
+      // Todo: peer.broadcastChain(chain);
+    }
+  }
+
+  function processChain(newChain) {
+    if (validChain(newChain) && luckier(newChain, chain)) {
+      console.log('Storing new chain: ' + JSON.stringify(newChain));
+      chain = newChain;
+      broadcastChain(chain);
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
+
   function commit(newTransactions, chain) {
     var timestamp = currentTimestamp();
     var previousBlock = chain[chain.length - 1];
@@ -252,35 +309,28 @@ var coreApp = function (options) {
   }
 
   function interval() {
-    var newTransactions = transactions;
-    transactions = [];
-    var newChain = commit(newTransactions, chain);
-    processChain(newChain);
-  }
-
-/****************************** NETWORK HELPERS ******************************/
-
-  function processChain(newChain) {
-    if (validChain(newChain) && luckier(newChain, chain)) {
-      chain = newChain;
-      /* Todo: Broadcast newChain to peers here */
-      return true;
-    }
-    else {
-      return false;
+    if (transactions === null || transactions === undefined) transactions = [];
+    if (transactions.length > 0) {
+      var newTransactions = transactions;
+      transactions = [];
+      var newChain = commit(newTransactions, chain);
+      processChain(newChain);
     }
   }
 
-/********************************** NETWORK **********************************/
+  var job = new cron(ROUND_TIME + ' * * * * * *', function() {
+    console.log('interval(ROUND_TIME)');
+    interval();
+  }, null, true);
+  
 
   app.get('/tx', function(req, res, next) {
     var tx = req.query.tx;
-    if (tx === null || tx === undefined) {
+    if (!validTransaction(tx)) {
       invalidError(res);
     }
     else if (!isInArray(tx, transactions)) {
-      transactions.push(tx);
-      /* Todo: Broadcast tx to peers here */
+      storeAndBroadcastTransaction(tx);
       var jsonDate = (new Date()).toJSON();
       var response = { message: 'success', datetime: jsonDate };
       res.status(200).json(response);
@@ -307,14 +357,6 @@ var coreApp = function (options) {
 
 /****************************** INFRASTRUCTURE *******************************/
 
-  app.get('/', function (req, res, next) {
-    res.render('template');
-  });
-
-  var server = app.listen(5001, function() {
-    console.log('Listening on port %d', server.address().port);
-  });
-
   /* For testing purposes */
   app.get('/echo', function (req, res, next) {
     var message = req.query.message; // Gets parameters from URL
@@ -326,6 +368,14 @@ var coreApp = function (options) {
       var response = { message: message, datetime: jsonDate }; // Construct JSON object
       res.status(200).json(response); // Send response to client
     }
+  });
+
+  app.get('/', function (req, res, next) {
+    res.render('template');
+  });
+
+  var server = app.listen(5001, function() {
+    console.log('Listening on port %d', server.address().port);
   });
 
 };
