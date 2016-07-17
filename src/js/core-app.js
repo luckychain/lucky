@@ -15,6 +15,8 @@ var ipfsLog = require('ipfs-log');
 
 var coreApp = function (options) {
   var app = options.app;
+  
+  var node = new ipfs();
 
   var ROUND_TIME = 1; /* Expressed in seconds */
 
@@ -536,8 +538,13 @@ var coreApp = function (options) {
   }, null, true);
   
 
+<<<<<<< HEAD
   app.post('/tx', function(req, res, next) {
     var tx = req.body.tx;
+=======
+  app.get('/tx', function(req, res, next) {
+    var tx = req.query.tx;
+>>>>>>> 1bbd7c6f60a9a4d9279093bb05132e240dc0db90
     if (!validTransaction(tx)) {
       invalidError(res);
     }
