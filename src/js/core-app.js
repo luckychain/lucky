@@ -12,6 +12,8 @@ var coreApp = function (options) {
 
   var ROUND_TIME = '3'; /* Time in seconds */
 
+  var CHAIN_DIRECTORY = 'storage/chain';
+
   var peers = [];
   var chain = [];
   var transactions = [];
@@ -84,7 +86,7 @@ var coreApp = function (options) {
 
   function blockHash(block) {
     if (block === null || block === undefined) return 0;
-    return fashHash(JSON.stringify(block));
+    return fastHash(JSON.stringify(block));
   }
 
 /*********************************** SGX *************************************/
@@ -121,7 +123,7 @@ var coreApp = function (options) {
     var fl = l;
     setTimeout(function() { 
       callback();
-    }, fl);  
+    }, fl);
   }
 
   function sgxReadMonotonicCounter() {
@@ -400,7 +402,7 @@ var coreApp = function (options) {
       readChain()
       .then((fsChain) => {
         if (validChain(newChain) && luckier(newChain, fsChain)) {
-          fs.writeFile('storage/chain', JSON.stringify(newChain, null, 2), (err) => {
+          fs.writeFile(CHAIN_DIRECTORY, JSON.stringify(newChain, null, 2), (err) => {
             if (err) logger('error: saveChain failed');
             else resolve();
           });
@@ -411,9 +413,9 @@ var coreApp = function (options) {
 
   function readChain() {
     return new Promise((resolve) => {
-      fs.readFile('storage/chain', function (err, data) {
+      fs.readFile(CHAIN_DIRECTORY, function (err, data) {
         if (err && err.code === 'ENOENT') {
-          fs.writeFile('storage/chain', JSON.stringify([], null, 2), (err) => {
+          fs.writeFile(CHAIN_DIRECTORY, JSON.stringify([], null, 2), (err) => {
             if (err) logger('error: read failed');
             else resolve([]);
           });
@@ -439,7 +441,7 @@ var coreApp = function (options) {
           return block.proof;
         });
 
-        fs.writeFile('storage/chain', JSON.stringify(fsChain, null, 2), (err) => {
+        fs.writeFile(CHAIN_DIRECTORY, JSON.stringify(fsChain, null, 2), (err) => {
           if (err) logger('error: writeChain failed');
           else resolve(fsChain);
         });
@@ -487,7 +489,10 @@ var coreApp = function (options) {
   function ipfsUpdatePeers() {
     return new Promise((resolve) => {
       ipfsPeerID()
-      .then(ipfsPeerDiscovery);
+      .then(ipfsPeerDiscovery)
+      .then((peers) => {
+        resolve(peers);
+      });
     });
   }
 
@@ -495,7 +500,10 @@ var coreApp = function (options) {
     return new Promise((resolve) => {
       getChainFromPeers()
       .then(saveChain)
-      .then(readChain);
+      .then(readChain)
+      .then((chain) => {
+        resolve(chain);
+      });
     });
   }
 
@@ -517,9 +525,14 @@ var coreApp = function (options) {
       .then(ipfsPeerDiscovery)
       .then(getChainFromPeers)
       .then(saveChain)
-      .then(readChain);
+      .then(readChain)
+      .then((chain) => {
+        resolve(chain);
+      });
     });
   }
+
+  ipfsReadChain(); // Rogue call - to be removed
 
 /********************************** NETWORK **********************************/
 
@@ -535,20 +548,24 @@ var coreApp = function (options) {
   }
 
   function interval() {
-    if (transactions === null || transactions === undefined) transactions = [];
-    if (transactions.length > 0) {
-      var newTransactions = transactions;
-      var newChain = commit(newTransactions, chain);
-      transactions = [];
-      if (validChain(newChain) && luckier(newChain, chain)) {
-        console.log('Storing new chain: ' + JSON.stringify(newChain));
-        chain = newChain;
-        ipfsWriteChain((path) => {
-          console.log('Chain path: ' + path);
-          return true;
-        });
+    return new Promise((resolve) => {
+      if (transactions === null || transactions === undefined) transactions = [];
+      if (transactions.length > 0) {
+        var newTransactions = transactions;
+        var newChain = commit(newTransactions, chain);
+        transactions = [];
+        if (validChain(newChain) && luckier(newChain, chain)) {
+          console.log('Storing new chain: ' + JSON.stringify(newChain));
+          chain = newChain;
+          ipfsWriteChain((path) => {
+            console.log('Chain path: ' + path);
+            resolve(path);
+          });
+        }
+        else resolve();
       }
-    }
+      else resolve();
+    });
   }
 
   var job = new cron('*/' + ROUND_TIME + ' * * * * *', function() {
@@ -584,7 +601,20 @@ var coreApp = function (options) {
     res.render('template');
   });
 
-/****************************** INFRASTRUCTURE *******************************/
+  var server = app.listen(8000, function() {
+    console.log('Listening on port %d', server.address().port);
+  });
+
+/************************** TESTING INFRASTRUCTURE ***************************/
+
+  function addTransactionTestingOnly(tx) {
+    return new Promise((resolve) => {
+      if (validTransaction(tx)) {
+        transactions.push(tx);
+      }
+      resolve(transactions);
+    });
+  }
 
   /* For testing purposes */
   app.get('/echo', function (req, res, next) {
@@ -598,10 +628,7 @@ var coreApp = function (options) {
       res.status(200).json(response); // Send response to client
     }
   });
-
-  var server = app.listen(8000, function() {
-    console.log('Listening on port %d', server.address().port);
-  });
+  
 };
 
 module.exports = coreApp;
