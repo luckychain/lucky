@@ -537,14 +537,8 @@ var coreApp = function (options) {
     interval();
   }, null, true);
   
-
-<<<<<<< HEAD
   app.post('/tx', function(req, res, next) {
     var tx = req.body.tx;
-=======
-  app.get('/tx', function(req, res, next) {
-    var tx = req.query.tx;
->>>>>>> 1bbd7c6f60a9a4d9279093bb05132e240dc0db90
     if (!validTransaction(tx)) {
       invalidError(res);
     }
