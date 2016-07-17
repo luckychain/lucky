@@ -35,3 +35,5 @@ node_modules
 # Debug logs
 npm-debug.log.*
 
+public/javascripts/bundle.js
+public/stylesheets/bundle.css
