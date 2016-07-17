@@ -15,10 +15,8 @@ var ipfsLog = require('ipfs-log');
 
 var coreApp = function (options) {
   var app = options.app;
-  
-  var node = new ipfs();
 
-  var ROUND_TIME = 1; /* Expressed in seconds */
+  var ROUND_TIME = '3'; /* Time in seconds */
 
   var peers = [];
   var chain = [];
@@ -61,22 +59,25 @@ var coreApp = function (options) {
     });
   }
 
-  function ipfsDiscoverPeers(hash) {
-    logger('ipfsDiscoverPeers');
+  function ipfsPeerDiscovery(hash) {
+    logger('ipfsPeerDiscovery');
     return new Promise((resolve) => {
       oboe('http://127.0.0.1:5001/api/v0/dht/findprovs\?arg\=' + hash)
        .done(function(things) {
          if (things.Type === 4) {
            var id = things.Responses[0].ID;
-           logger('ipfsDiscoverPeers: ' + id);
+           logger('ipfsPeerDiscovery: ' + id);
            peers.push(id);
          }
          if (things.Extra === "routing: not found") {
+          peers = _.unique(peers, function(x) {
+            return x.timestamp;
+          });
           resolve(peers);
          }
        })
        .fail(function() {
-         console.log('error: ipfsDiscoverPeers failed to find peers');
+         console.log('error: ipfsPeerDiscovery failed to find peers');
        });
     });
   }
@@ -97,6 +98,25 @@ var coreApp = function (options) {
     });
   }
 
+  function ipfsCatParser(string, name, callback) {
+    var firstLine = string.split('\n')[0];
+    var choices = string.split(firstLine);
+
+    var prototype = "Content-Disposition: file; filename=\"" + name + "\"";
+    var innerPrototype = "octet-stream";
+    for (var i = 0; i < choices.length; i++) {
+      if (choices[i].indexOf(prototype) > -1) {
+        var start = choices[i].indexOf(innerPrototype) + innerPrototype.length;
+        var end = choices[i].lastIndexOf("]")+1;
+        if (start < end) {
+          results = choices[i].substr(start, end-start);
+          results = JSON.parse(results);
+          callback(results);
+        }
+      }
+    }
+  }
+
   function ipfsPeerCat(path) {
     logger('ipfsPeerCat');
     return new Promise((resolve) => {
@@ -110,26 +130,11 @@ var coreApp = function (options) {
           res.on('data', function(chunk) {
             chunks.push(chunk);
           });
-
           res.on('end', function() {
             var results = chunks.join('');
-            var firstLine = results.split('\n')[0];
-            var choices = results.split(firstLine);
-
-            var prototype = "Content-Disposition: file; filename=\"messages\"";
-            var innerPrototype = "octet-stream";
-            for (var i = 0; i < choices.length; i++) {
-              if (choices[i].indexOf(prototype) > -1) {
-                var start = choices[i].indexOf(innerPrototype) + innerPrototype.length;
-                var end = choices[i].lastIndexOf("]")+1;
-                if (start < end) {
-                  results = choices[i].substr(start, end-start);
-                  results = JSON.parse(results);
-                  logger('ipfsPeerCat: ' + results);
-                  resolve(results);
-                }
-              }
-            }
+            ipfsCatParser(results, 'messages', function (res) {
+              resolve(res);
+            });
           });
         }
       });
@@ -155,17 +160,7 @@ var coreApp = function (options) {
         return ipfsPeerResolve(peer).then(ipfsPeerCat);
       })
       Promise.all(peersPromises).then((messages) => {
-
-        // var sortedStart = _.sortBy(messages[0], (o) => {
-        //   return o.timestamp;
-        // });
-        // sortedStart.forEach((item) => {
-        //   log.add(item);
-        // })
-        // .then(() => { console.log(log.items); });
-
         var mergedMessages = merger(messages);
-        console.log("merged messages ====");
         console.log(mergedMessages);
         resolve(mergedMessages)
       })
@@ -226,12 +221,83 @@ var coreApp = function (options) {
     })
   }
 
-  ipfsPeerID()
-  .then(ipfsDiscoverPeers)
-  .then(getMessagesFromPeers)
-  .then(saveMessages)
-  .then(read)
-  .then(printMessages)
+
+  function addStorage() {
+    logger('addStorage');
+    return new Promise((resolve) => {
+      ipfs.add('storage', { recursive: true }, (err, res) => {
+        if (err) {
+          logger('error: addStorage failed');
+        }
+        var hash = res.pop().Hash;
+        logger('addStorage: ' + hash);
+        resolve(hash);
+      });
+    });
+  }
+
+  function publish(hash) {
+    logger('publish');
+    return new Promise((resolve) => {
+      ipfs.name.publish(hash, (err, res) => {
+        if (err) {
+          logger('error: publish failed');
+        }
+        var name = res.Name;
+        logger('publish: ' + name);
+        resolve(name);
+      });
+    });
+  }
+
+  function ipfsRead() {
+    return new Promise((resolve) => {
+      ipfsPeerID()
+      .then(ipfsPeerDiscovery)
+      .then(getMessagesFromPeers)
+      .then(saveMessages)
+      .then(read)
+      .then(printMessages);
+    });
+  }
+
+  function ipfsWrite(message) {
+    return new Promise((resolve) => {
+      ipfs.id((err, res) => {
+        if (err) {
+          logger('error: ipfsWrite failed');
+        }
+        var id = res.ID;
+        write(id, message)
+        .then(addStorage)
+        .then(publish)
+        .then((path) => {
+          resolve(path);
+        });
+      });
+    });
+  }
+
+  ipfsRead();
+
+  //-------//
+
+  // function ipfsWriteChain(message) {
+  //   return new Promise((resolve) => {
+  //     ipfs.id((err, res) => {
+  //       if (err) {
+  //         logger('error: ipfsWrite failed');
+  //       }
+  //       var id = res.ID;
+  //       write(id, message)
+  //       .then(addStorage)
+  //       .then(publish)
+  //       .then((path) => {
+  //         resolve(path);
+  //       });
+  //     });
+  //   });
+  // }
 
 /****************************** ERROR HANDLING *******************************/
 
@@ -469,7 +535,7 @@ var coreApp = function (options) {
 
 /********************************** NETWORK **********************************/
 
-  function storeAndBroadcastTransaction(tx) {
+  function storeTransaction(tx) {
     node.object.put(tx, function(err, res) {
       if (err) console.log(err);
       else {
@@ -491,19 +557,19 @@ var coreApp = function (options) {
     });
   }
 
-  function broadcastChain(chain) {
-    for (var i = 0; i < peers.length; i++) {
-      var peer = peers[i];
-      console.log('Broadcasting chain to peer: ' + peer);
-      // Todo: peer.broadcastChain(chain);
-    }
-  }
+  // function broadcastChain(chain) {
+  //   for (var i = 0; i < peers.length; i++) {
+  //     var peer = peers[i];
+  //     console.log('Broadcasting chain to peer: ' + peer);
+  //     // Todo: peer.broadcastChain(chain);
+  //   }
+  // }
 
   function processChain(newChain) {
     if (validChain(newChain) && luckier(newChain, chain)) {
       console.log('Storing new chain: ' + JSON.stringify(newChain));
       chain = newChain;
-      broadcastChain(chain);
+      // broadcastChain(chain);
       return true;
     }
     else {
@@ -511,28 +577,28 @@ var coreApp = function (options) {
     }
   }
 
-  function commit(newTransactions, chain) {
+  function commit(newTransactions, newChain) {
     var timestamp = currentTimestamp();
-    var previousBlock = chain[chain.length - 1];
+    var previousBlock = newChain[newChain.length - 1];
     var previous = blockHash(previousBlock);
     var nonce = blockHash(newBlock(previous, newTransactions, timestamp));
     var proof = proofOfLuck(nonce);
     var newBlock = newBlock(previous, newTransactions, timestamp, proof);
-    chain.push(newBlock);
-    return chain;
+    newChain.push(newBlock);
+    return newChain;
   }
 
   function interval() {
     if (transactions === null || transactions === undefined) transactions = [];
     if (transactions.length > 0) {
       var newTransactions = transactions;
-      transactions = [];
       var newChain = commit(newTransactions, chain);
+      transactions = [];
       processChain(newChain);
     }
   }
 
-  var job = new cron(ROUND_TIME + ' * * * * * *', function() {
+  var job = new cron('*/' + ROUND_TIME + ' * * * * *', function() {
     console.log('interval(ROUND_TIME)');
     interval();
   }, null, true);
@@ -543,7 +609,7 @@ var coreApp = function (options) {
       invalidError(res);
     }
     else if (!isInArray(tx, transactions)) {
-      storeAndBroadcastTransaction(tx);
+      storeTransaction(tx);
       var jsonDate = (new Date()).toJSON();
       var response = { message: 'success', datetime: jsonDate };
       res.status(200).json(response);
@@ -553,20 +619,20 @@ var coreApp = function (options) {
     }
   });
 
-  app.post('/chain', function(req, res, next) {
-    var newChain = req.body.chain;
-    if (newChain === null || newChain === undefined) {
-      invalidError(res);
-    }
-    if (processChain(newChain)) {
-      var jsonDate = (new Date()).toJSON();
-      var response = { message: 'success', datetime: jsonDate };
-      res.status(200).json(response);
-    }
-    else {
-      invalidChain(res);
-    }
-  });
+  // app.post('/chain', function(req, res, next) {
+  //   var newChain = req.body.chain;
+  //   if (newChain === null || newChain === undefined) {
+  //     invalidError(res);
+  //   }
+  //   if (processChain(newChain)) {
+  //     var jsonDate = (new Date()).toJSON();
+  //     var response = { message: 'success', datetime: jsonDate };
+  //     res.status(200).json(response);
+  //   }
+  //   else {
+  //     invalidChain(res);
+  //   }
+  // });
 
 /****************************** INFRASTRUCTURE *******************************/
 
