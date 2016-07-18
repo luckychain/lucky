@@ -14,6 +14,8 @@ var coreApp = function (options) {
 
   var CHAIN_DIRECTORY = 'storage/chain';
 
+  var CHAIN_DIRECTORY = 'storage/chain';
+
   var peers = [];
   var chain = [];
   var transactions = [];
