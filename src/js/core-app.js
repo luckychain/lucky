@@ -14,6 +14,8 @@ var coreApp = function (options) {
 
   var CHAIN_DIRECTORY = 'storage/chain';
 
+  var CHAIN_DIRECTORY = 'storage/chain';
+
   var peers = [];
   var chain = [];
   var transactions = [];
@@ -319,6 +321,26 @@ var coreApp = function (options) {
     });
   }
 
+  function ipfsPeerPublish() {
+    logger('ipfsPeerPublish');
+    return new Promise((resolve) => {
+      ipfs.add('storage', { recursive: true }, (err, res) => {
+        if (err) {
+          logger('error: ipfsPeerPublish failed');
+        }
+        var hash = res.pop().Hash;
+        ipfs.name.publish(hash, (err, res) => {
+          if (err) {
+            logger('error: ipfsPeerPublish failed');
+          }
+          var name = res.Name;
+          logger('ipfsPeerPublish: ' + name);
+          resolve(name);
+        });
+      });
+    });
+  }
+
   function ipfsPeerResolve(id) {
     logger('ipfsPeerResolve');
     return new Promise((resolve) => {
@@ -335,35 +357,12 @@ var coreApp = function (options) {
     });
   }
 
-  /* Remark: this could use a more elegant solution */
-  function catParser(string, name, callback) {
-    var firstLine = string.split('\n')[0];
-    var choices = string.split(firstLine);
-
-    var prototype = "Content-Disposition: file; filename=\"" + name + "\"";
-    var innerPrototype = "octet-stream";
-    for (var i = 0; i < choices.length; i++) {
-      if (choices[i].indexOf(prototype) > -1) {
-        var start = choices[i].indexOf(innerPrototype) + innerPrototype.length;
-        var end = choices[i].lastIndexOf("]")+1;
-        if (start < end) {
-          results = choices[i].substr(start, end-start);
-          results = JSON.parse(results);
-          callback(results);
-        }
-      }
-      else if (i === choices.length - 1) {
-        callback([{}]);
-      }
-    }
-  }
-
-  function ipfsPeerCat(path) {
-    logger('ipfsPeerCat');
+  function ipfsPeerChain(path) {
+    logger('ipfsPeerChain');
     return new Promise((resolve) => {
-      ipfs.cat(path, (err, res) => {
+      ipfs.cat(path + '/chain', (err, res) => {
         if (err) {
-          logger('error: ipfsPeerCat failed => ');
+          logger('error: ipfsPeerChain failed => ');
           console.log(err);
         }
         else {
@@ -373,10 +372,9 @@ var coreApp = function (options) {
           });
           res.on('end', function() {
             var results = chunks.join('');
-            catParser(results, 'chain', function (res) {
-              logger('ipfsPeerCat: ' + res);
-              resolve(res);
-            });
+            results = JSON.parse(results);
+            logger('ipfsPeerChain: ' + results);
+            resolve(results);
           });
         }
       });
@@ -396,7 +394,7 @@ var coreApp = function (options) {
   function getChainFromPeers(peers) {
     return new Promise((resolve) => {
       var peersPromises = peers.map((peer) => {
-        return ipfsPeerResolve(peer).then(ipfsPeerCat);
+        return ipfsPeerResolve(peer).then(ipfsPeerChain);
       })
       Promise.all(peersPromises).then((chains) => {
         var newChain = luckiestChain(chains);
@@ -458,20 +456,6 @@ var coreApp = function (options) {
     });
   }
 
-  function addStorage() {
-    logger('addStorage');
-    return new Promise((resolve) => {
-      ipfs.add('storage', { recursive: true }, (err, res) => {
-        if (err) {
-          logger('error: addStorage failed');
-        }
-        var hash = res.pop().Hash;
-        logger('addStorage: ' + hash);
-        resolve(hash);
-      });
-    });
-  }
-
   function printChain(chain) {
     return new Promise((resolve) => {
       chain.forEach((block) => {
@@ -481,16 +465,16 @@ var coreApp = function (options) {
     });
   }
 
-  function publishChain(hash) {
-    logger('publishChain');
+  function ipfsInit() {
     return new Promise((resolve) => {
-      ipfs.name.publish(hash, (err, res) => {
-        if (err) {
-          logger('error: publishChain failed');
-        }
-        var name = res.Name;
-        logger('publishChain: ' + name);
-        resolve(name);
+      ipfsPeerPublish()
+      .then(ipfsPeerID)
+      .then(ipfsPeerDiscovery)
+      .then(getChainFromPeers)
+      .then(saveChain)
+      .then(readChain)
+      .then((chain) => {
+        resolve(chain);
       });
     });
   }
@@ -520,8 +504,7 @@ var coreApp = function (options) {
     logger('ipfsWriteChain');
     return new Promise((resolve) => {
       writeChain()
-      .then(addStorage)
-      .then(publishChain)
+      .then(ipfsPeerPublish)
       .then((path) => {
         resolve(path);
       });
@@ -541,7 +524,7 @@ var coreApp = function (options) {
     });
   }
 
-  ipfsReadChain(); // Rogue call - to be moved
+  ipfsInit();
 
 /********************************** NETWORK **********************************/
 
