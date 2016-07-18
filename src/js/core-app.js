@@ -10,7 +10,9 @@ var ipfsLog = require('ipfs-log');
 var coreApp = function (options) {
   var app = options.app;
 
-  var ROUND_TIME = '3'; /* Time in seconds */
+  var ROUND_TIME = 3; /* Time in seconds */
+
+  var CHAIN_DIRECTORY = 'storage/chain';
 
   var peers = [];
   var chain = [];
@@ -55,25 +57,7 @@ var coreApp = function (options) {
     return hash;
   }
 
-  function validTransaction(tx) {
-    if (tx === null || tx === undefined) return false;
-    else if (tx.inputs === null || tx.inputs === undefined) return false;
-    else if (tx.outputs === null || tx.outputs === undefined) return false;
-    else if (tx.timestamp === null || tx.timestamp === undefined) return false;
-    else return true;
-  }
-
 /********************************** BLOCK ************************************/
-
-  function newBlock(previous, newTransactions, timestamp, proof) {
-    var block = {
-      previous: previous,
-      transactions: newTransactions,
-      timestamp: timestamp,
-      proof: proof
-    };
-    return block;
-  }
 
   function printBlock(block) {
     console.log('Block: \n timestamp: ' + block.timestamp
@@ -83,8 +67,17 @@ var coreApp = function (options) {
   }
 
   function blockHash(block) {
+    console.log('blockHash');
     if (block === null || block === undefined) return 0;
-    return fashHash(JSON.stringify(block));
+    return fastHash(JSON.stringify(block));
+  }
+
+  function validTransaction(tx) {
+    if (tx === null || tx === undefined) return false;
+    else if (tx.inputs === null || tx.inputs === undefined) return false;
+    else if (tx.outputs === null || tx.outputs === undefined) return false;
+    else if (tx.timestamp === null || tx.timestamp === undefined) return false;
+    else return true;
   }
 
 /*********************************** SGX *************************************/
@@ -119,9 +112,9 @@ var coreApp = function (options) {
   function sgxSleep(l, callback) {
     /* Todo: implement f(l) */
     var fl = l;
-    setTimeout(function() { 
+    setTimeout(function() {
       callback();
-    }, fl);  
+    }, fl);
   }
 
   function sgxReadMonotonicCounter() {
@@ -133,18 +126,21 @@ var coreApp = function (options) {
     return sgxInternalCounter;
   }
 
-  function sgxProofOfLuck(nonce) {
+  function sgxProofOfLuck(nonce, callback) {
     var now = sgxGetTrustedTime();
     if (now >= lastTime + ROUND_TIME) {
       lastTime = now;
       l = sgxGetRandom();
       sgxSleep(l, function() {
+        console.log('returned from sgxsleep');
         var newCounter = sgxReadMonotonicCounter();
         if (counter === newCounter) {
-          return sgxReport(nonce, l);
+          callback(null, sgxReport(nonce, l));
         }
+        else callback('error: sgxProofOfLuck counter', null);
       });
     }
+    else callback('error: sgxProofOfLuck time', null);
   }
 
   function sgxProofOfOwnership(nonce) {
@@ -189,9 +185,12 @@ var coreApp = function (options) {
     return score;
   }
 
-  function proofOfLuck(nonce) {
-    var report = sgxProofOfLuck(nonce);
-    return sgxQuote(report, null);
+  function proofOfLuck(nonce, callback) {
+    sgxProofOfLuck(nonce, function(err, report) {
+      if (!err) {
+        callback(null, sgxQuote(report, null));
+      }
+    });
   }
 
   function proofOfOwnership(nonce) {
@@ -209,52 +208,64 @@ var coreApp = function (options) {
     return sgxQuote(report, null);
   }
 
+  // function luckier(newChain, oldChain) {
+  //   if (newChain.length >= oldChain.length) {
+  //     var newChainPrefix = newChain.splice(0, oldChain.length);
+  //     var newChainPrefixScore = score(newChainPrefix);
+  //     var oldChainScore = score(oldChain);
+  //     if (newChainPrefixScore <= oldChainScore && newChain.length > oldChain.length) {
+  //       return true;
+  //     }
+  //     else if (newChainPrefixScore < oldChainScore) {
+  //       return true;
+  //     }
+  //   }
+  //   return false;
+  // }
+
+  // function validChain(chain) {
+  //   var previousBlock;
+  //   var previousTimestamp;
+
+  //   while (chain.length > 0) {
+  //     var block = chain.shift();
+  //     if (block.previous !== blockHash(previousBlock)) {
+  //       return false;
+  //     }
+  //     else if (!sgxValidAttestation(block.proof)) {
+  //       return false;
+  //     }
+  //     else if (previousTimestamp !== null && block.timestamp <= previousTimestamp + ROUND_TIME) {
+  //       return false;
+  //     }
+  //     else if (timestamp > currentTimestamp + ROUND_TIME) {
+  //       return false;
+  //     }
+  //     else {
+  //       var report = sgxReportData(block.proof);
+  //       var newBlock = {
+  //         previous: block.previous,
+  //         transactions: block.transactions,
+  //         timestamp: block.timestamp
+  //       }
+  //       if (report.nonce !== blockHash(newBlock)) {
+  //         return false;
+  //       }
+  //       else {
+  //         previousBlock = block;
+  //         previousTimestamp = timestamp;
+  //       }
+  //     }
+  //   }
+
+  //   return true;
+  // }
+
   function luckier(newChain, oldChain) {
-    if (newChain.length >= oldChain.length) {
-      var newChainPrefix = newChain.splice(0, oldChain.length);
-      var newChainPrefixScore = score(newChainPrefix);
-      var oldChainScore = score(oldChain);
-      if (newChainPrefixScore <= oldChainScore && newChain.length > oldChain.length) {
-        return true;
-      }
-      else if (newChainPrefixScore < oldChainScore) {
-        return true;
-      }
-    }
-    return false;
+    return true;
   }
 
   function validChain(chain) {
-    var previousBlock;
-    var previousTimestamp;
-
-    while (chain.length > 0) {
-      var block = chain.shift();
-      if (block.previous !== blockHash(previousBlock)) {
-        return false;
-      }
-      else if (!sgxValidAttestation(block.proof)) {
-        return false;
-      }
-      else if (previousTimestamp !== null && block.timestamp <= previousTimestamp + ROUND_TIME) {
-        return false;
-      }
-      else if (timestamp > currentTimestamp + ROUND_TIME) {
-        return false;
-      }
-      else {
-        var report = sgxReportData(block.proof);
-        var newBlock = newBlock(block.previous, block.transactions, block.timestamp);
-        if (report.nonce !== blockHash(newBlock)) {
-          return false;
-        }
-        else {
-          previousBlock = block;
-          previousTimestamp = timestamp;
-        }
-      }
-    }
-
     return true;
   }
 
@@ -400,7 +411,7 @@ var coreApp = function (options) {
       readChain()
       .then((fsChain) => {
         if (validChain(newChain) && luckier(newChain, fsChain)) {
-          fs.writeFile('storage/chain', JSON.stringify(newChain, null, 2), (err) => {
+          fs.writeFile(CHAIN_DIRECTORY, JSON.stringify(newChain, null, 2), (err) => {
             if (err) logger('error: saveChain failed');
             else resolve();
           });
@@ -411,9 +422,9 @@ var coreApp = function (options) {
 
   function readChain() {
     return new Promise((resolve) => {
-      fs.readFile('storage/chain', function (err, data) {
+      fs.readFile(CHAIN_DIRECTORY, function (err, data) {
         if (err && err.code === 'ENOENT') {
-          fs.writeFile('storage/chain', JSON.stringify([], null, 2), (err) => {
+          fs.writeFile(CHAIN_DIRECTORY, JSON.stringify([], null, 2), (err) => {
             if (err) logger('error: read failed');
             else resolve([]);
           });
@@ -439,7 +450,7 @@ var coreApp = function (options) {
           return block.proof;
         });
 
-        fs.writeFile('storage/chain', JSON.stringify(fsChain, null, 2), (err) => {
+        fs.writeFile(CHAIN_DIRECTORY, JSON.stringify(fsChain, null, 2), (err) => {
           if (err) logger('error: writeChain failed');
           else resolve(fsChain);
         });
@@ -487,7 +498,10 @@ var coreApp = function (options) {
   function ipfsUpdatePeers() {
     return new Promise((resolve) => {
       ipfsPeerID()
-      .then(ipfsPeerDiscovery);
+      .then(ipfsPeerDiscovery)
+      .then((peers) => {
+        resolve(peers);
+      });
     });
   }
 
@@ -495,7 +509,10 @@ var coreApp = function (options) {
     return new Promise((resolve) => {
       getChainFromPeers()
       .then(saveChain)
-      .then(readChain);
+      .then(readChain)
+      .then((chain) => {
+        resolve(chain);
+      });
     });
   }
 
@@ -517,38 +534,62 @@ var coreApp = function (options) {
       .then(ipfsPeerDiscovery)
       .then(getChainFromPeers)
       .then(saveChain)
-      .then(readChain);
+      .then(readChain)
+      .then((chain) => {
+        resolve(chain);
+      });
     });
   }
 
+  ipfsReadChain(); // Rogue call - to be moved
+
 /********************************** NETWORK **********************************/
 
-  function commit(newTransactions, newChain) {
+  function commit(newTransactions, newChain, callback) {
     var timestamp = currentTimestamp();
-    var previousBlock = newChain[newChain.length - 1];
+    var previousBlock = newChain.length > 0 ? newChain[newChain.length - 1] : 'GENESIS';
     var previous = blockHash(previousBlock);
-    var nonce = blockHash(newBlock(previous, newTransactions, timestamp));
-    var proof = proofOfLuck(nonce);
-    var newBlock = newBlock(previous, newTransactions, timestamp, proof);
-    newChain.push(newBlock);
-    return newChain;
+    var nonce = blockHash({
+      previous: previous,
+      transactions: newTransactions,
+      timestamp: timestamp
+    });
+    proofOfLuck(nonce, function(err, proof) {
+      if (err) callback('error: commit proof of luck', null);
+      else {
+        newChain.push({
+          previous: previous,
+          transactions: newTransactions,
+          timestamp: timestamp,
+          proof: proof
+        });
+        callback(null, newChain);
+      }
+    });
   }
 
   function interval() {
-    if (transactions === null || transactions === undefined) transactions = [];
-    if (transactions.length > 0) {
-      var newTransactions = transactions;
-      var newChain = commit(newTransactions, chain);
-      transactions = [];
-      if (validChain(newChain) && luckier(newChain, chain)) {
-        console.log('Storing new chain: ' + JSON.stringify(newChain));
-        chain = newChain;
-        ipfsWriteChain((path) => {
-          console.log('Chain path: ' + path);
-          return true;
+    return new Promise((resolve) => {
+      if (transactions === null || transactions === undefined) transactions = [];
+      if (transactions.length > 0) {
+        var newTransactions = transactions;
+        commit(newTransactions, chain, function(err, newChain) {
+          if (err) resolve(err, null);
+          transactions = [];
+          console.log('interval mid');
+          if (validChain(newChain) && luckier(newChain, chain)) {
+            console.log('Storing new chain: ' + JSON.stringify(newChain));
+            chain = newChain;
+            ipfsWriteChain((path) => {
+              console.log('Stored chain path: ' + path);
+              resolve(path);
+            });
+          }
+          else resolve();
         });
       }
-    }
+      else resolve();
+    });
   }
 
   var job = new cron('*/' + ROUND_TIME + ' * * * * *', function() {
@@ -566,6 +607,7 @@ var coreApp = function (options) {
       transactions.push(tx);
       var jsonDate = (new Date()).toJSON();
       var response = { message: 'success', datetime: jsonDate };
+      console.log('/tx successful');
       res.status(200).json(response);
     }
     else {
@@ -584,7 +626,20 @@ var coreApp = function (options) {
     res.render('template');
   });
 
-/****************************** INFRASTRUCTURE *******************************/
+  var server = app.listen(8000, function() {
+    console.log('Listening on port %d', server.address().port);
+  });
+
+/************************** TESTING INFRASTRUCTURE ***************************/
+
+  function addTransactionTestingOnly(tx) {
+    return new Promise((resolve) => {
+      if (validTransaction(tx)) {
+        transactions.push(tx);
+      }
+      resolve(transactions);
+    });
+  }
 
   /* For testing purposes */
   app.get('/echo', function (req, res, next) {
@@ -598,10 +653,7 @@ var coreApp = function (options) {
       res.status(200).json(response); // Send response to client
     }
   });
-
-  var server = app.listen(8000, function() {
-    console.log('Listening on port %d', server.address().port);
-  });
+  
 };
 
 module.exports = coreApp;

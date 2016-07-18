@@ -37,3 +37,5 @@ npm-debug.log.*
 
 public/javascripts/bundle.js
 public/stylesheets/bundle.css
+storage/chain
+storage/messages

@@ -14,6 +14,7 @@ var ButtonToolbar = require('react-bootstrap/lib/ButtonToolbar');
 var Form = require('react-bootstrap/lib/Form');
 var FormGroup = require('react-bootstrap/lib/FormGroup');
 var FormControl = require('react-bootstrap/lib/FormControl');
+var ControlLabel = require('react-bootstrap/lib/ControlLabel');
 
 var request = require('request');
 
@@ -78,16 +79,27 @@ var Blockchain = React.createClass({
 var Publish = React.createClass({
   getInitialState() {
     return {
-      value: ''
+      inputValue: '',
+      outputValue: ''
     };
   },
 
-  handleChange(e) {
-    this.setState({ value: e.target.value });
+  handleInputChange(e) {
+    this.setState({ inputValue: e.target.value });
+  },
+
+  handleOutputChange(e) {
+    this.setState({ outputValue: e.target.value });
   },
 
   submitTransaction: function() {
-    var transaction = { tx: this.state.value };
+    var transaction = {
+      tx: {
+        inputs: this.state.inputValue,
+        outputs: this.state.outputValue,
+        timestamp: new Date()
+      }
+    };
 
     var that = this;
     request({
@@ -108,11 +120,20 @@ var Publish = React.createClass({
         <PageHeader>Publish</PageHeader>
         <Form>
           <FormGroup controlId="formControlsTextarea">
+            <ControlLabel>Inputs</ControlLabel>
             <FormControl
               type="text"
-              value={this.state.value}
+              value={this.state.inputValue}
               componentClass="textarea"
-              onChange={this.handleChange}
+              onChange={this.handleInputChange}
+            />
+
+            <ControlLabel>Outputs</ControlLabel>
+            <FormControl
+              type="text"
+              value={this.state.outputValue}
+              componentClass="textarea"
+              onChange={this.handleOutputChange}
             />
           </FormGroup>
           <FormGroup>
