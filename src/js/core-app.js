@@ -14,8 +14,6 @@ var coreApp = function (options) {
 
   var CHAIN_DIRECTORY = 'storage/chain';
 
-  var CHAIN_DIRECTORY = 'storage/chain';
-
   var peers = [];
   var chain = [];
   var transactions = [];
@@ -286,9 +284,7 @@ var coreApp = function (options) {
     logger('ipfsPeerID');
     return new Promise((resolve) => {
       ipfs.add('storage/id', (err, res) => {
-        if (err) {
-          logger('error: ipfsPeerID failed');
-        }
+        if (err) logger('error: ipfsPeerID failed');
         else {
           var hash = res[0].Hash;
           logger('ipfsPeerID: ' + hash);
@@ -302,22 +298,22 @@ var coreApp = function (options) {
     logger('ipfsPeerDiscovery');
     return new Promise((resolve) => {
       oboe('http://127.0.0.1:5001/api/v0/dht/findprovs\?arg\=' + hash)
-       .done(function(things) {
-         if (things.Type === 4) {
-           var id = things.Responses[0].ID;
-           logger('ipfsPeerDiscovery: ' + id);
-           peers.push(id);
-         }
-         if (things.Extra === "routing: not found") {
+      .done(function(things) {
+        if (things.Type === 4) {
+          var id = things.Responses[0].ID;
+          logger('ipfsPeerDiscovery: ' + id);
+          peers.push(id);
+        }
+        if (things.Extra === "routing: not found") {
           peers = _.unique(peers, function(x) {
             return x.timestamp;
           });
           resolve(peers);
-         }
-       })
-       .fail(function() {
-         console.log('error: ipfsPeerDiscovery failed to find peers');
-       });
+        }
+      })
+      .fail(function() {
+        console.log('error: ipfsPeerDiscovery failed to find peers');
+      });
     });
   }
 
@@ -325,14 +321,10 @@ var coreApp = function (options) {
     logger('ipfsPeerPublish');
     return new Promise((resolve) => {
       ipfs.add('storage', { recursive: true }, (err, res) => {
-        if (err) {
-          logger('error: ipfsPeerPublish failed');
-        }
+        if (err) logger('error: ipfsPeerPublish failed');
         var hash = res.pop().Hash;
         ipfs.name.publish(hash, (err, res) => {
-          if (err) {
-            logger('error: ipfsPeerPublish failed');
-          }
+          if (err) logger('error: ipfsPeerPublish failed');
           var name = res.Name;
           logger('ipfsPeerPublish: ' + name);
           resolve(name);
@@ -345,9 +337,7 @@ var coreApp = function (options) {
     logger('ipfsPeerResolve');
     return new Promise((resolve) => {
       ipfs.name.resolve(id, (err, res) => {
-        if (err) {
-          logger('error: ipfsPeerResolve failed');
-        }
+        if (err) logger('error: ipfsPeerResolve failed');
         else {
           var path = res.Path;
           logger('ipfsPeerResolve: ' + path);
@@ -373,109 +363,74 @@ var coreApp = function (options) {
           res.on('end', function() {
             var results = chunks.join('');
             results = JSON.parse(results);
-            logger('ipfsPeerChain: ' + results);
-            resolve(results);
+            var hash = results.Hash;
+            ipfs.object.get(hash, (err, res) => {
+              res = JSON.parse(res);
+              logger('ipfsPeerChain: ' + res);
+              resolve(res);
+            });
           });
         }
       });
     });
   }
 
-  function luckiestChain(chains) {
-    var bestChain = chains[0];
-    chains.forEach((currChain) => {
-      if (validChain(currChain) && luckier(currChain, bestChain)) {
-        bestChain = currChain;
-      }
-    });
-    return bestChain;
-  }
-
-  function getChainFromPeers(peers) {
+  function ipfsReadChain(peers) {
+    logger('ipfsReadChain');
     return new Promise((resolve) => {
       var peersPromises = peers.map((peer) => {
         return ipfsPeerResolve(peer).then(ipfsPeerChain);
       })
-      Promise.all(peersPromises).then((chains) => {
-        var newChain = luckiestChain(chains);
+      Promise.all(peersPromises)
+      .then((chains) => {
+        var bestChain = chains[0];
+        chains.forEach((currChain) => {
+          if (validChain(currChain) && luckier(currChain, bestChain)) {
+            bestChain = currChain;
+          }
+        });
+        resolve(bestChain);
+      })
+      .then((newChain) => {
         console.log(newChain);
         resolve(newChain);
       });
     });
   }
 
-  function saveChain(newChain) {
-    return new Promise((resolve) => {
-      readChain()
-      .then((fsChain) => {
-        if (validChain(newChain) && luckier(newChain, fsChain)) {
-          fs.writeFile(CHAIN_DIRECTORY, JSON.stringify(newChain, null, 2), (err) => {
-            if (err) logger('error: saveChain failed');
-            else resolve();
-          });
-        }
-      });
-    });
-  }
-
-  function readChain() {
+  function ipfsWriteChain(chain) {
+    logger('ipfsWriteChain');
     return new Promise((resolve) => {
       fs.readFile(CHAIN_DIRECTORY, function (err, data) {
-        if (err && err.code === 'ENOENT') {
-          fs.writeFile(CHAIN_DIRECTORY, JSON.stringify([], null, 2), (err) => {
-            if (err) logger('error: read failed');
-            else resolve([]);
+        if (!err) {
+          var ipChain = { "Data": chain, "Links": [{ "Hash": JSON.parse(data).Hash }] };
+          fs.writeFile(CHAIN_DIRECTORY, JSON.stringify(ipChain, null, 2), (err) => {
+            if (err) logger('error: ipfsWriteChain failed');
+            else {
+              ipfs.object.put(CHAIN_DIRECTORY, 'json', (err, res) => {
+                fs.writeFile(CHAIN_DIRECTORY, JSON.stringify(res, null, 2), (err) => {
+                  if (err) logger('error: ipfsWriteChain failed');
+                  else {
+                    ipfsPeerPublish();
+                    resolve();
+                  }
+                });
+              });
+            }
           });
         }
-        else if (err) {
-          logger('error: readChain failed');
-        }
-        else {
-          resolve(JSON.parse(data));
-        }
       });
-    });
-  }
-
-  function writeChain() {
-    return new Promise((resolve) => {
-      readChain().then((fsChain) => {
-        chain.forEach(function(block) {
-          fsChain.push(block);
-        });
-
-        fsChain = _.unique(fsChain, function(block) {
-          return block.proof;
-        });
-
-        fs.writeFile(CHAIN_DIRECTORY, JSON.stringify(fsChain, null, 2), (err) => {
-          if (err) logger('error: writeChain failed');
-          else resolve(fsChain);
-        });
-      });
-    });
-  }
-
-  function printChain(chain) {
-    return new Promise((resolve) => {
-      chain.forEach((block) => {
-        printBlock(block);
-      });
-      resolve();
     });
   }
 
   function ipfsInit() {
     return new Promise((resolve) => {
-      ipfsPeerPublish()
-      .then(ipfsPeerID)
+      ipfsPeerPublish();
+      
+      ipfsPeerID()
       .then(ipfsPeerDiscovery)
-      .then(getChainFromPeers)
-      .then(saveChain)
-      .then(readChain)
-      .then((chain) => {
-        resolve(chain);
-      });
+      .then(ipfsReadChain)
+      .then(ipfsWriteChain);
     });
   }
 
@@ -485,41 +440,6 @@ var coreApp = function (options) {
       .then(ipfsPeerDiscovery)
       .then((peers) => {
         resolve(peers);
-      });
-    });
-  }
-
-  function ipfsUpdateChain() {
-    return new Promise((resolve) => {
-      getChainFromPeers()
-      .then(saveChain)
-      .then(readChain)
-      .then((chain) => {
-        resolve(chain);
-      });
-    });
-  }
-
-  function ipfsWriteChain() {
-    logger('ipfsWriteChain');
-    return new Promise((resolve) => {
-      writeChain()
-      .then(ipfsPeerPublish)
-      .then((path) => {
-        resolve(path);
-      });
-    });
-  }
-
-  function ipfsReadChain() {
-    return new Promise((resolve) => {
-      ipfsPeerID()
-      .then(ipfsPeerDiscovery)
-      .then(getChainFromPeers)
-      .then(saveChain)
-      .then(readChain)
-      .then((chain) => {
-        resolve(chain);
       });
     });
   }
@@ -558,12 +478,12 @@ var coreApp = function (options) {
         var newTransactions = transactions;
         commit(newTransactions, chain, function(err, newChain) {
           if (err) resolve(err, null);
+
           transactions = [];
-          console.log('interval mid');
           if (validChain(newChain) && luckier(newChain, chain)) {
             console.log('Storing new chain: ' + JSON.stringify(newChain));
             chain = newChain;
-            ipfsWriteChain((path) => {
+            ipfsWriteChain(chain, (path) => {
               console.log('Stored chain path: ' + path);
               resolve(path);
             });
@@ -598,12 +518,12 @@ var coreApp = function (options) {
     }
   });
 
-  app.get('/chain', function (req, res, next) {
-    readChain((chain) => {
-      var response = { blocks: blocks };
-      res.status(200).json(response);
-    });
-  });
+  // app.get('/chain', function (req, res, next) {
+  //   readChain((chain) => {
+  //     var response = { blocks: blocks };
+  //     res.status(200).json(response);
+  //   });
+  // });
 
   app.get('/', function (req, res, next) {
     res.render('template');

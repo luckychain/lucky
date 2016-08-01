@@ -1,17 +1,18 @@
-[
-  {
+{
+  "Data": "{
     "previous": 1269126588,
     "transactions": [
       {
-        "inputs": "test",
-        "outputs": "test2",
-        "timestamp": "2016-07-18T01:54:02.647Z"
+        "inputs": "1",
+        "outputs": "2",
+        "timestamp": "2016-07-18T02:44:14.760Z"
       }
     ],
-    "timestamp": 1468806843641,
+    "timestamp": 1468809855684,
     "proof": {
-      "nonce": 71724102,
-      "l": 0.18353153043426573
+      "nonce": -2016631917,
+      "l": 0.03298119409009814
     }
-  }
-]
+  }"
+}
+  

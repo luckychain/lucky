@@ -1,12 +1,5 @@
-[
-  {
-    "user": "QmXWLYGNg7E5PiWCe5P3Xxui1yHJKzScjyjUJkNVaK2w7Q",
-    "timestamp": "2016-07-16T22:36:07.263Z",
-    "text": "test"
-  },
-  {
-    "user": "QmXWLYGNg7E5PiWCe5P3Xxui1yHJKzScjyjUJkNVaK2w7Q",
-    "timestamp": "2016-07-16T23:11:28.576Z",
-    "text": "test"
-  }
-]
+{
+  "Data": "QmXWLYGNg7E5PiWCe5P3Xxui1yHJKzScjyjUJkNVaK2w7Q",
+  "timestamp": "2016-07-16T22:36:07.263Z",
+  "text": "test"
+}
