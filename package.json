@@ -6,7 +6,7 @@
     "build-js": "browserify -dt reactify ./src/js/browser-app.js -o ./public/javascripts/bundle.js -v",
     "build-css": "cat ./public/stylesheets/styles/*.css > ./public/stylesheets/bundle.css",
     "build": "npm run build-js && npm run build-css",
-    "start": "foreman start",
+    "start": "nf start",
     "test": "mocha"
   },
   "dependencies": {
@@ -19,11 +19,11 @@
     "cors": "^2.7.1",
     "cron": "^1.1.0",
     "debug": "^2.1.3",
+    "deep-equal": "^1.0.1",
     "ejs": "^2.3.4",
     "express": "~4.12.2",
-    "ipfs": "^0.14.3",
-    "ipfs-api": "~2.4.1",
-    "ipfs-log": "^1.4.9",
+    "foreman": "^1.4.1",
+    "ipfs-api": "^4.0.2",
     "mime-db": "^1.20.0",
     "mocha": "^2.5.3",
     "morgan": "~1.5.1",
