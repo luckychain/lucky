@@ -12,21 +12,21 @@ var coreApp = function (options) {
 
 /******************************** STRUCTURE **********************************/
   /*
-   * Header:
+   * Block:
    * {
    *   Data: {
-   *     score: 1208
-   *     attestation: "<sgx signature>"
+   *     luck: 1208
+   *     attestation: "<SGX signature>"
    *   }
    *   Links: [{
-   *     name: "block",
-   *     address: "<address of the block>"
+   *     name: "payload",
+   *     address: "<address of the payload>"
    *   }]
    * }
    *
-   * Block:
+   * Payload:
    * {
-   *   Data: { luck: 94 }
+   *   Data: ""
    *   Links: [{
    *       name: "parent",
    *       hash: "<address of parent block>
@@ -43,7 +43,7 @@ var coreApp = function (options) {
    *   ]
    * }
    *
-   * Transactions:
+   * Transactions: (Uncommitted)
    * {
    *   Data: "",
    *   Links: [{
@@ -68,19 +68,19 @@ var coreApp = function (options) {
 /****************************** INITIALIZATION *******************************/
 
   /* Client Parameters */
-  var ROUND_TIME = 5; /* Time in seconds */
+  var ROUND_TIME = 10; /* Time in seconds */
   var PUBSUB_TIME = 3; /* Pubsub "polling" interval */
   var COMMIT_THRESHOLD = 0; /* Minimum number of transactions to trigger commit */
 
   /* Storage */
   var STORAGE_DIRECTORY = "storage";
   var ID_DIRECTORY = STORAGE_DIRECTORY + "/id";
-  var HEADER_DIRECTORY = STORAGE_DIRECTORY + "/header";
+  var BLOCK_DIRECTORY = STORAGE_DIRECTORY + "/block";
   var TRANSACTIONS_DIRECTORY = STORAGE_DIRECTORY + "/transactions";
 
   /* Blockchain */
   var peers = [];
-  var header = {};
+  var block = {};
   var transactions = {};
   initializeLocalState();
 
@@ -105,14 +105,14 @@ var coreApp = function (options) {
       }
     });
 
-    fs.readFile(HEADER_DIRECTORY, function (err, res) {
+    fs.readFile(BLOCK_DIRECTORY, function (err, res) {
       if (err) {
-        var data = JSON.stringify({ score: 0, attestation: "" });
-        header = { Data: data, Links: [{ name: block, hash: "GENESIS" }] };
-        var header_string = JSON.stringify(header, null, 2);
-        fs.writeFile(HEADER_DIRECTORY, header_string, null);
+        var data = JSON.stringify({ luck: -1, attestation: "" });
+        block = { Data: data, Links: [{ name: "payload", hash: "GENESIS" }] };
+        var block_string = JSON.stringify(block, null, 2);
+        fs.writeFile(BLOCK_DIRECTORY, block_string, null);
       } else {
-        header = JSON.parse(res.toString());
+        block = JSON.parse(res.toString());
       }
     });
   }
@@ -132,18 +132,6 @@ var coreApp = function (options) {
       if (equal(obj, x)) return true;
     }
     return false;
-  }
-
-  /* http://werxltd.com/wp/2010/05/13/javascript-implementation-of-javas-string-hashcode-method/*/
-  function fastHash(str) {
-    var hash = 0;
-    if (str.length == 0) return hash;
-    for (i = 0; i < str.length; i++) {
-      char = str.charCodeAt(i);
-      hash = ((hash<<5)-hash)+char;
-      hash = hash & hash; // Convert to 32-bit integer
-    }
-    return hash;
   }
 
 /****************************** ERROR HANDLING *******************************/
@@ -251,9 +239,9 @@ var coreApp = function (options) {
           res.on("data", function(chunk) { chunks.push(chunk); });
           res.on("end", function() {
             var results = JSON.parse(chunks.join(" "));
-            console.log('IPFS GET DATA HERE ======');
-            console.log(results);
-            console.log("=====z=====");
+            logger("===== IPFS DATA FROM: " + path + " =====");
+            logger(JSON.stringify(results));
+            logger("==============");
             var hash = results.Hash;
             ipfs.object.get(hash, (err, res) => {
               res = JSON.parse(res);
@@ -266,23 +254,23 @@ var coreApp = function (options) {
     });
   }
 
-  function ipfsWriteBlock(newBlock) {
-    logger("ipfsWriteBlock");
+  function ipfsWritePayload(newPayload) {
+    logger("ipfsWritePayload");
     return new Promise((resolve) => {
-      ipfs.object.put(newBlock, "json", (err, res) => {
+      ipfs.object.put(newPayload, "json", (err, res) => {
         var hash = res.toJSON().Hash;
-        logger("ipfsWriteBlock: " + hash);
+        logger("ipfsWritePayload: " + hash);
         resolve(hash);
       });
     });
   }
 
-  function ipfsWriteHeader(newHeader) {
-    logger("ipfsWriteHeader");
+  function ipfsWriteBlock(newBlock) {
+    logger("ipfsWriteBlock");
     return new Promise((resolve) => {
-      var header_string = JSON.stringify(newHeader, null, 2);
-      fs.writeFile(HEADER_DIRECTORY, header_string, (err) => {
-        if (err) logger("error: ipfsWriteHeader failed");
+      var block_string = JSON.stringify(newBlock, null, 2);
+      fs.writeFile(BLOCK_DIRECTORY, block_string, (err) => {
+        if (err) logger("error: ipfsWriteBlock failed");
         else {
           ipfsPeerPublish.then((name) => {
             resolve(name);
@@ -345,42 +333,44 @@ var coreApp = function (options) {
 
 
   /* Recursively iterate through all blocks in the chain. */
-  function ipfsBlockIterator(blockAddress, job) {
-    if (job === "chain") {
-      ipfs.object.get(blockAddress, "json", (err, res) => {
-        var block = JSON.parse(res);
-        block.Links.forEach((link) => {
-          if (link.name === "parent" && link.hash !== "GENESIS") {
-            ipfsBlockIterator(link.hash, txs);
-          }
-          else if (link.name === "transaction") {
-            ipfs.object.get(link.hash, "json", (err, res) => {
-              var tx = JSON.parse(res);
-              txs.push(tx);
-            });
-          }
-        }); // needs promise here
-        return txs;
-      });
-    }
+  // function ipfsBlockIterator(blockAddress, job) {
+  //   if (job === "chain") {
+  //     ipfs.object.get(blockAddress, "json", (err, res) => {
+  //       var block = JSON.parse(res);
+  //       block.Links.forEach((link) => {
+  //         if (link.name === "parent" && link.hash !== "GENESIS") {
+  //           ipfsBlockIterator(link.hash, txs);
+  //         }
+  //         else if (link.name === "transaction") {
+  //           ipfs.object.get(link.hash, "json", (err, res) => {
+  //             var tx = JSON.parse(res);
+  //             txs.push(tx);
+  //           });
+  //         }
+  //       }); // needs promise here
+  //       return txs;
+  //     });
+  //   }
 
 
-    ipfs.object.get(blockAddress, "json", (err, res) => {
-      var block = JSON.parse(res);
-      block.links.forEach((link) => {
-        if (link.name === "parent" && link.hash !== "GENESIS") {
-          ipfsBlockIterator(link.hash, txs);
-        }
-        else if (link.name === "transaction") {
-          ipfs.object.get(link.hash, "json", (err, res) => {
-            var tx = JSON.parse(res);
-            txs.push(tx);
-          });
-        }
-      }); // needs promise here
-      return txs;
-    });
-  }
+  //   ipfs.object.get(blockAddress, "json", (err, res) => {
+  //     var block = JSON.parse(res);
+  //     block.links.forEach((link) => {
+  //       if (link.name === "parent" && link.hash !== "GENESIS") {
+  //         ipfsBlockIterator(link.hash, txs);
+  //       }
+  //       else if (link.name === "transaction") {
+  //         ipfs.object.get(link.hash, "json", (err, res) => {
+  //           var tx = JSON.parse(res);
+  //           txs.push(tx);
+  //         });
+  //       }
+  //     }); // needs promise here
+  //     return txs;
+  //   });
+  // }
+
+
 
   // /* Given the head block of a chain, iterate through the blocks. */
   // function ipfsFetchTransactions(head) {
@@ -393,19 +383,21 @@ var coreApp = function (options) {
   //   return txs;
   // }
 
-  function ipfsConstructChain(header) {
 
-    ipfsBlockIterator(header.Links[0].address, "chain")
-    .then((newChain) => {
 
-    });
+  // function ipfsConstructChain(block) {
 
-    head.links.forEach((link) => {
-      if (link[0] === "block") {
-        ipfsBlockIterator(link.address, txs);
-      }
-    }); // needs promise here
-  }
+  //   ipfsBlockIterator(block.Links[0].address, "chain")
+  //   .then((newChain) => {
+
+  //   });
+
+  //   head.links.forEach((link) => {
+  //     if (link[0] === "block") {
+  //       ipfsBlockIterator(link.address, txs);
+  //     }
+  //   }); // needs promise here
+  // }
 
 
 
@@ -418,12 +410,17 @@ var coreApp = function (options) {
 /*********************************** SGX *************************************/
 
   function sgxQuote(report, unused) {
-    /* Todo: find out SGX quote return items */
     return { report: report, l: report.l };
   }
 
   function sgxReport(nonce, l) {
-    return { nonce: nonce, l: l };
+    return {
+      report: "",
+      data: {
+        nonce: nonce,
+        l: l
+      }
+    };
   }
 
   function sgxReportData(quote) {
@@ -554,13 +551,6 @@ var coreApp = function (options) {
     else return true;
   }
 
-  /* Returns a nonce, which is the hash of the block's links */
-  function blockHash(blockLinks) {
-    console.log("blockHash");
-    if (blockLinks === null || blockLinks === undefined) return 0;
-    return fastHash(JSON.stringify(blockLinks));
-  }
-
   /* Needs updating to new block setup */
   // function validChain(chain) {
   //   var previousBlock;
@@ -587,7 +577,7 @@ var coreApp = function (options) {
   //         transactions: block.transactions,
   //         timestamp: block.timestamp
   //       }
-  //       if (report.nonce !== blockHash(newBlock)) {
+  //       if (report.nonce !== "newblock's address") {
   //         return false;
   //       }
   //       else {
@@ -614,6 +604,22 @@ var coreApp = function (options) {
     return score;
   }
 
+  function verifyLuck(newBlock, oldBlock) {
+    return new Promise((resolve) => {
+      // verify the luck of blocks in newblock and oldblock chains, and count their lengths
+      var valid = true;
+      var newChainLength = 1;
+      var oldChainLength = 1;
+
+      var result = {
+        valid: valid,
+        newChainLength: newChainLength,
+        oldChainLength: oldChainLength
+      };
+      resolve(result);
+    });
+  }
+
   // function luckier(newChain, oldChain) {
   //   if (newChain.length >= oldChain.length) {
   //     var newChainPrefix = newChain.splice(0, oldChain.length);
@@ -629,26 +635,30 @@ var coreApp = function (options) {
   //   return false;
   // }
 
-
-  function luckier(newHeader, oldHeader) {
-    if (newHeader.Data.score <= oldHeader.Data.score) {
+  function luckier(newBlock, oldBlock) {
+    if (newBlock.Data.luck <= oldBlock.Data.luck) {
       return false;
     } else {
-      // construct newchain, oldchain
-      // compute score from luck
-      // do lucky-relevant checks
-      return true;
+      verifyLuck(newBlock, oldBlock).then((res) => {
+        if (!res.valid) return false;
+        else {
+          // etc -> res.newChain.length;
+          // do lucky-relevant checks
+          return true;
+        }
+      });
     }
   }
 
-  function updateChain(newHeader, header) {
-    if (validChain(newChain) && luckier(newHeader, header)) {
+  function updateChain(newBlock, block) {
+    if (validChain(newChain) && luckier(newBlock, block)) {
       logger("updateChain: verifying luckier chain");
 
-      ipfsWriteHeader(newHeader)
+      ipfsWriteBlock(newBlock)
       .then((name) => {
         console.log("updateChain successful, path: " + name);
-        header = newHeader;
+        block = newBlock;
+
         transactions = []; // remove only interval's ones
         // update transactions file
       });
@@ -661,10 +671,10 @@ var coreApp = function (options) {
     logger("pubSubChain");
     peers.forEach((peer) => {
       ipfsPeerResolve(peer).then((peer) => {
-        return ipfsGetData(peer, "/header");
+        return ipfsGetData(peer, "/block");
       })
-      .then((peerHeader) => {
-        updateChain(peerHeader, header);
+      .then((peerBlock) => {
+        updateChain(peerBlock, block);
       });
     });
   }
@@ -695,30 +705,36 @@ var coreApp = function (options) {
 /********************************** INTERVAL *********************************/
 
   /*
-   * Construct a new block in the chain and a header block for commit.
+   * Construct a new payload and block for commit.
    * Hash the links as the data parameter is determined by the hash of links.
    */
   function commit(callback) {
-    var newBlock = transactions;
-    newBlock.Links.push({ name: "parent", hash: header.links[0].hash });
+    var newPayload = transactions;
+    newPayload.Links.push({
+      name: "parent",
+      hash: block.links[0].hash
+    });
 
-    var nonce = blockHash(newBlock.Links);
-    proofOfLuck(nonce, function(err, proof) {
-      if (err) callback("error: commit proof of luck", null);
+    ipfsWritePayload(newPayload, (err, res) => {
+      if (err) callback("error commit: ipfsWritePayload", null);
       else {
-        newBlock.Data = proof.l;
+        var address = res.toJSON().Hash;
+        var nonce = address;
 
-        ipfsWriteBlock(newBlock, (err, res) => {
-          if (err) callback("error: commit ipfsWriteBlock", null);
+        proofOfLuck(nonce, (err, proof) => {
+          if (err) callback("error commit: proof of luck", null);
           else {
-            var newHeader = {
-              Data: { luck: score(newChain), attestation: proof },
+            var newBlock = {
+              Data: {
+                luck: proof.l,
+                attestation: proof
+              },
               Links: [{
                 name: "block",
-                address: res.toJSON().Hash
+                address: address
               }]
             };
-            callback(null, newHeader);
+            callback(null, newBlock);
           }
         });
       }
@@ -731,9 +747,9 @@ var coreApp = function (options) {
     // ipfsUpdatePeers();
 
     if (transactions.length > COMMIT_THRESHOLD) {
-      commit((err, newHeader) => {
+      commit((err, newBlock) => {
         if (err) resolve(err, null);
-        else updateChain(newHeader, header);
+        else updateChain(newBlock, block);
       });
     }
   }, null, true);
@@ -769,7 +785,8 @@ var coreApp = function (options) {
   function addTransactionTestingOnly(tx) {
     return new Promise((resolve) => {
       if (validTransaction(tx)) {
-        ipfsWriteTransaction(tx).then((name) => {
+        ipfsWriteTransaction(tx)
+        .then((name) => {
           transactions.push(tx);
           resolve(transactions);
         });
