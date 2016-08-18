@@ -79,25 +79,18 @@ var Blockchain = React.createClass({
 var Publish = React.createClass({
   getInitialState() {
     return {
-      inputValue: '',
-      outputValue: ''
+      value: ''
     };
   },
 
-  handleInputChange(e) {
-    this.setState({ inputValue: e.target.value });
-  },
-
-  handleOutputChange(e) {
-    this.setState({ outputValue: e.target.value });
+  handleChange(e) {
+    this.setState({ value: e.target.value });
   },
 
   submitTransaction: function() {
     var transaction = {
       tx: {
-        inputs: this.state.inputValue,
-        outputs: this.state.outputValue,
-        timestamp: new Date()
+        Data: this.state.value
       }
     };
 
@@ -120,20 +113,12 @@ var Publish = React.createClass({
         <PageHeader>Publish</PageHeader>
         <Form>
           <FormGroup controlId="formControlsTextarea">
-            <ControlLabel>Inputs</ControlLabel>
+            <ControlLabel>Transaction</ControlLabel>
             <FormControl
               type="text"
-              value={this.state.inputValue}
+              value={this.state.value}
               componentClass="textarea"
-              onChange={this.handleInputChange}
-            />
-
-            <ControlLabel>Outputs</ControlLabel>
-            <FormControl
-              type="text"
-              value={this.state.outputValue}
-              componentClass="textarea"
-              onChange={this.handleOutputChange}
+              onChange={this.handleChange}
             />
           </FormGroup>
           <FormGroup>
