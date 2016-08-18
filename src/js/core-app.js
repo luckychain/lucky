@@ -744,7 +744,7 @@ var coreApp = function (options) {
   /* Interval Updates */
   var interval = new cron("*/" + ROUND_TIME + " * * * * *", function() {
     console.log("interval - ROUND_TIME: " + ROUND_TIME + " seconds");
-    // ipfsUpdatePeers();
+    ipfsUpdatePeers();
 
     if (transactions.length > COMMIT_THRESHOLD) {
       commit((err, newBlock) => {
