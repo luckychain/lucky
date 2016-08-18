@@ -172,9 +172,7 @@ var coreApp = function (options) {
           var id = things.Responses[0].ID;
           logger("ipfsPeerDiscovery: " + id);
           peers.push(id);
-          peers = _.unique(peers, function(x) {
-            return x.timestamp;
-          });
+          peers = _.unique(peers);
         }
       })
       .fail(function() {
@@ -238,16 +236,11 @@ var coreApp = function (options) {
           var chunks = [];
           res.on("data", function(chunk) { chunks.push(chunk); });
           res.on("end", function() {
-            var results = JSON.parse(chunks.join(" "));
+            var data = JSON.parse(chunks.join(""));
             logger("===== IPFS DATA FROM: " + path + " =====");
-            logger(JSON.stringify(results));
+            logger(JSON.stringify(data));
             logger("==============");
-            var hash = results.Hash;
-            ipfs.object.get(hash, (err, res) => {
-              res = JSON.parse(res);
-              logger("ipfsGetData: " + res);
-              resolve(res);
-            });
+            resolve(data);
           });
         }
       });
@@ -670,8 +663,9 @@ var coreApp = function (options) {
   function pubSubChain() {
     logger("pubSubChain");
     peers.forEach((peer) => {
-      ipfsPeerResolve(peer).then((peer) => {
-        return ipfsGetData(peer, "/block");
+      ipfsPeerResolve(peer).then((path) => {
+        logger(path);
+        return ipfsGetData(path, "/block");
       })
       .then((peerBlock) => {
         updateChain(peerBlock, block);
