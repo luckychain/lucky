@@ -167,7 +167,7 @@ var coreApp = function (options) {
     logger("ipfsPeerDiscovery");
     return new Promise((resolve) => {
       oboe("http://127.0.0.1:5001/api/v0/dht/findprovs\?arg\=" + hash)
-      .done(function(things) {
+      .done((things) => {
         if (things.Type === 4) {
           var id = things.Responses[0].ID;
           logger("ipfsPeerDiscovery: " + id);
@@ -187,21 +187,22 @@ var coreApp = function (options) {
   function ipfsPeerPublish() {
     logger("ipfsPeerPublish");
     return new Promise((resolve) => {
-      ipfs.add(STORAGE_DIRECTORY, { recursive: true }, (err, res) => {
+      ipfs.add(STORAGE_DIRECTORY, { recursive: true }, (err, addRes) => {
         if (err) {
           logger("error: ipfsPeerPublish failed");
-          console.log(err);
+          logger(err);
           ipfsPeerPublish();
         } else {
-          var hash = res.filter(function (path) {
+          var hash = addRes.filter((path) => {
             return path.Name === STORAGE_DIRECTORY;
           })[0].Hash;
-          ipfs.name.publish(hash, null, (err, res) => {
+
+          ipfs.name.publish(hash, null, (err, publishRes) => {
             if (err) {
               logger("error: ipfsPeerPublish failed");
-              console.log(err);
+              logger(err);
             } else {
-              var name = res.Name;
+              var name = publishRes.Name;
               logger("ipfsPeerPublish successful: " + name);
               resolve(name);
             }
@@ -214,10 +215,11 @@ var coreApp = function (options) {
   /* Called on every pubsub interval, so fail silently */
   function ipfsPeerResolve(id) {
     return new Promise((resolve) => {
-      ipfs.name.resolve(id, null, (err, res) => {
+      ipfs.name.resolve(id, null, (err, resolveRes) => {
         if (!err) {
-          logger("ipfsPeerResolve: " + res.Path);
-          resolve(res.Path);
+          var path = resolveRes.Path;
+          logger("ipfsPeerResolve: " + path);
+          resolve(path);
         }
       });
     });
@@ -227,15 +229,19 @@ var coreApp = function (options) {
   function ipfsGetData(path, link) {
     logger("ipfsGetData");
     return new Promise((resolve) => {
-      ipfs.cat(path + link, (err, res) => {
+      ipfs.cat(path + link, (err, catRes) => {
         if (err) {
-          logger("error: ipfsGetData failed => ");
-          console.log(err);
+          logger("error: ipfsGetData failed");
+          logger(err);
         }
         else {
           var chunks = [];
-          res.on("data", function(chunk) { chunks.push(chunk); });
-          res.on("end", function() {
+
+          catRes.on("data", (chunk) => {
+            chunks.push(chunk);
+          });
+
+          catRes.on("end", () => {
             var data = JSON.parse(chunks.join(""));
             logger("===== IPFS DATA FROM: " + path + " =====");
             logger(JSON.stringify(data));
@@ -251,9 +257,13 @@ var coreApp = function (options) {
     logger("ipfsWritePayload");
     return new Promise((resolve) => {
       ipfs.object.put(newPayload, "json", (err, res) => {
-        var hash = res.toJSON().Hash;
-        logger("ipfsWritePayload: " + hash);
-        resolve(hash);
+        if (err) {
+          logger("error: ipfsWritePayload failed");
+        } else {
+          var hash = res.toJSON().Hash;
+          logger("ipfsWritePayload: " + hash);
+          resolve(hash);
+        }
       });
     });
   }
@@ -263,9 +273,11 @@ var coreApp = function (options) {
     return new Promise((resolve) => {
       var block_string = JSON.stringify(newBlock, null, 2);
       fs.writeFile(BLOCK_DIRECTORY, block_string, (err) => {
-        if (err) logger("error: ipfsWriteBlock failed");
-        else {
-          ipfsPeerPublish.then((name) => {
+        if (err) {
+          logger("error: ipfsWriteBlock failed");
+        } else {
+          ipfsPeerPublish
+          .then((name) => {
             resolve(name);
           });
         }
@@ -278,9 +290,11 @@ var coreApp = function (options) {
     return new Promise((resolve) => {
       var transactions_string = JSON.stringify(newTransaction, null, 2);
       fs.writeFile(TRANSACTIONS_DIRECTORY, transactions_string, (err) => {
-        if (err) logger("error: ipfsWriteTransaction failed");
-        else {
-          ipfsPeerPublish.then((name) => {
+        if (err) {
+          logger("error: ipfsWriteTransaction failed");
+        } else {
+          ipfsPeerPublish
+          .then((name) => {
             resolve(name);
           });
         }
@@ -290,6 +304,7 @@ var coreApp = function (options) {
 
 
   // /* Recursively check if any transaction matches tx */
+  // NEEDS ERROR CHECKING
   // function blockContainsTransaction(blockAddress, tx) {
   //   return new Promise((resolve) => {
   //     ipfs.object.get(blockAddress, "json", (err, res) => {
@@ -326,6 +341,7 @@ var coreApp = function (options) {
 
 
   /* Recursively iterate through all blocks in the chain. */
+  // NEEDS ERROR CHECKING
   // function ipfsBlockIterator(blockAddress, job) {
   //   if (job === "chain") {
   //     ipfs.object.get(blockAddress, "json", (err, res) => {
@@ -345,7 +361,7 @@ var coreApp = function (options) {
   //     });
   //   }
 
-
+  // NEEDS ERROR CHECKING
   //   ipfs.object.get(blockAddress, "json", (err, res) => {
   //     var block = JSON.parse(res);
   //     block.links.forEach((link) => {
@@ -396,7 +412,8 @@ var coreApp = function (options) {
 
   function ipfsUpdatePeers() {
     return new Promise((resolve) => {
-      ipfsPeerID().then(ipfsPeerDiscovery);
+      ipfsPeerID()
+      .then(ipfsPeerDiscovery);
     });
   }
 
@@ -431,11 +448,11 @@ var coreApp = function (options) {
     return currentTimestamp();
   }
 
-  // function sgxGetRandom() {
-  //   var rand = Math.random();
-  //   while (rand === 0) rand = Math.random();
-  //   return 1 / rand;
-  // }
+  function sgxGetRandom() {
+    var rand = Math.random();
+    while (rand === 0) rand = Math.random();
+    return 1 / rand;
+  }
 
   function sgxSleep(l, callback) {
     var fl = (l / Number.MAX_VALUE) * ROUND_TIME;
@@ -533,14 +550,20 @@ var coreApp = function (options) {
 
 /********************************** CHAIN ************************************/  
 
+  function spentTransaction(tx) {
+    // Todo: implement check
+    return false;
+  }
+
   /* 
    * Returns true if the transaction is not already in the list of uncommitted
    * transactions and is not already included in a block, else returns false.
    */
   function validTransaction(tx) {
     if (tx === null || tx === undefined) return false;
-    else if (containsObject(tx, transactions)) return false;
     else if (tx.Data === null || tx.Data === undefined) return false;
+    else if (containsObject(tx, transactions)) return false;
+    else if (spentTransaction(tx)) return false;
     else return true;
   }
 
@@ -613,30 +636,25 @@ var coreApp = function (options) {
     });
   }
 
-  // function luckier(newChain, oldChain) {
-  //   if (newChain.length >= oldChain.length) {
-  //     var newChainPrefix = newChain.splice(0, oldChain.length);
-  //     var newChainPrefixScore = score(newChainPrefix);
-  //     var oldChainScore = score(oldChain);
-  //     if (newChainPrefixScore <= oldChainScore && newChain.length > oldChain.length) {
-  //       return true;
-  //     }
-  //     else if (newChainPrefixScore < oldChainScore) {
-  //       return true;
-  //     }
-  //   }
-  //   return false;
-  // }
-
   function luckier(newBlock, oldBlock) {
-    if (newBlock.Data.luck <= oldBlock.Data.luck) {
+    if (newBlock.Data.luck < oldBlock.Data.luck) {
       return false;
     } else {
-      verifyLuck(newBlock, oldBlock).then((res) => {
+      verifyLuck(newBlock, oldBlock)
+      .then((res) => {
         if (!res.valid) return false;
+        else if (res.newChainLength < res.oldChainLength) return false;
         else {
-          // etc -> res.newChain.length;
-          // do lucky-relevant checks
+          // var newChainPrefix = newChain.splice(0, res.oldChainLength);
+          // var newChainPrefixScore = score(newChainPrefix);
+          // var oldChainScore = score(oldChain);
+          // if (newChainPrefixScore <= oldChainScore && res.newChainLength > res.oldChainLength) {
+          //   return true;
+          // }
+          // else if (newChainPrefixScore < oldChainScore) {
+          //   return true;
+          // }
+
           return true;
         }
       });
@@ -663,7 +681,8 @@ var coreApp = function (options) {
   function pubSubChain() {
     logger("pubSubChain");
     peers.forEach((peer) => {
-      ipfsPeerResolve(peer).then((path) => {
+      ipfsPeerResolve(peer)
+      .then((path) => {
         logger(path);
         return ipfsGetData(path, "/block");
       })
@@ -673,27 +692,28 @@ var coreApp = function (options) {
     });
   }
 
-  // function pubSubTransactions() {
-  //   logger("pubSubTransactions");
-  //   var peerPromises = peers.map((peer) => {
-  //     return ipfsPeerResolve(peer).then((peer) => {
-  //       ipfsGetData(peer, "/transactions");
-  //     });
-  //   });
-  //   Promise.all(peerPromises)
-  //   .then((peerTransactions) => {
-  //     peerTransactions.forEach((peerTransaction) => {
-  //       if (validTransaction(peerTransaction)) {
-  //         transactions.push(peerTransaction);
-  //       }
-  //     });
-  //   });
-  // }
+  function pubSubTransactions() {
+    logger("pubSubTransactions");
+    var peerPromises = peers.map((peer) => {
+      return ipfsPeerResolve(peer)
+      .then((path) => {
+        ipfsGetData(path, "/transactions");
+      });
+    });
+    Promise.all(peerPromises)
+    .then((peerTransactions) => {
+      peerTransactions.forEach((peerTransaction) => {
+        if (validTransaction(peerTransaction)) {
+          transactions.push(peerTransaction);
+        }
+      });
+    });
+  }
 
   var pubSub = new cron("*/" + PUBSUB_TIME + " * * * * *", function() {
     console.log("pubSub updates");
     pubSubChain();
-    // pubSubTransactions();
+    pubSubTransactions();
   }, null, true);
 
 /********************************** INTERVAL *********************************/
@@ -710,14 +730,16 @@ var coreApp = function (options) {
     });
 
     ipfsWritePayload(newPayload, (err, res) => {
-      if (err) callback("error commit: ipfsWritePayload", null);
-      else {
+      if (err) {
+        callback("error commit: ipfsWritePayload", null);
+      } else {
         var address = res.toJSON().Hash;
         var nonce = address;
 
         proofOfLuck(nonce, (err, proof) => {
-          if (err) callback("error commit: proof of luck", null);
-          else {
+          if (err) {
+            callback("error commit: proof of luck", null);
+          } else {
             var newBlock = {
               Data: {
                 luck: proof.l,
@@ -756,11 +778,12 @@ var coreApp = function (options) {
     var tx = req.body.tx;
     if (!validTransaction(tx)) invalidTransaction(res);
     else {
-      ipfsWriteTransaction(tx).then((name) => {
+      ipfsWriteTransaction(tx)
+      .then((name) => {
         transactions.push(tx);
 
         console.log("/tx successful");
-        var response = { message: "success", datetime: (new Date()).toJSON() };
+        var response = { message: "success", datetime: currentTimestamp() };
         res.status(200).json(response);
       });   
     }
