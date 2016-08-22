@@ -163,6 +163,27 @@ var coreApp = function (options) {
     }
   }
 
+  function validData(data, link) {
+    if (data === undefined || data === null || data === "") {
+      return false;
+    }
+    else {
+      var object = JSON.parse(data);
+      if (object.Links === undefined || object.Links === null) {
+        return false;
+      }
+      else if ((link === "/block") && (object.Data === undefined || object.Data === null)) {
+        return false;
+      }
+      else if (link !== "/block" && link !== "/transaction") {
+        return false;
+      }
+      else {
+        return true;
+      }
+    }
+  }
+
 /****************************** ERROR HANDLING *******************************/
 
   function invalidError(res) {
@@ -297,12 +318,21 @@ var coreApp = function (options) {
           catRes.on("end", () => {
             console.timeEnd("getData");
             if (chunks.length > 0) {
-              var data = JSON.parse(chunks.join(""));
-              logger("---------------------------------------------------------------------------");
-              logger("IPFS " + link + " DATA FROM: " + path);
-              logger(JSON.stringify(data));
-              logger("---------------------------------------------------------------------------");
-              resolve(data);
+              var joinData = chunks.join("");
+              if (validData(joinData, link)) {
+                joinData = JSON.parse(joinData);
+                if (typeof joinData.Link === "string") {
+                  joinData.Link = JSON.parse(joinData.Link);
+                }
+                if (link === "/block" && typeof joinData.Data === "string") {
+                  joinData.Data = JSON.parse(joinData.Data);
+                }
+
+                logger("---------------------------------------------------------------------------");
+                logger("IPFS " + link + " DATA FROM: " + path);
+                logger(JSON.stringify(joinData));
+                logger("---------------------------------------------------------------------------");
+              }
             }
           });
         }
@@ -860,6 +890,8 @@ var coreApp = function (options) {
         return ipfsGetData(path, "/block");
       })
       .then((newBlock) => {
+        console.log(newBlock);
+        console.log(block);
         if (newBlock.Data.luck > block.Data.luck) {
           var hash = newBlock.Links[0].hash;
           ipfsConstructChain(hash)
@@ -901,8 +933,11 @@ var coreApp = function (options) {
 
       Promise.all(validTransactionLinks)
       .then((newTransactionLinks) => {
-        transactions.Links = _.union(transactions.Links, newTransactionLinks);
-        ipfsWriteTransactions();
+        if (newTransactionLinks.length > 0) {
+          transactions.Links = _.union(transactions.Links, newTransactionLinks);
+          console.log(transactions);
+          ipfsWriteTransactions();
+        }
       });
     });
   }
