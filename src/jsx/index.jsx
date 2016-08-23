@@ -41,12 +41,19 @@ var Blockchain = React.createClass({
       headers: { 'Content-Type': 'application/json' },
     }, function (error, response, body) {
       if (body) {
-        var body = JSON.parse(body);
+        var chain = JSON.parse(body).chain;
 
         var blocks = [];
-        for (var i = 0; i < body.blocks.length; i++) {
-          var block = body.blocks[i];
-          blocks.push({ id: i, transactions: block.transactions });
+        for (var i = 0; i < chain.length; i++) {
+          var block = chain[i];
+          blocks.push({
+            id: i,
+            attestation: block.attestation,
+            hash: block.hash,
+            luck: block.luck,
+            parent: block.parent,
+            transactions: block.transactions,
+          });
         }
 
         that.setState({
@@ -66,9 +73,17 @@ var Blockchain = React.createClass({
         <PageHeader>Blockchain</PageHeader>
         <PanelGroup activeKey={this.state.activeKey} onSelect={this.handleSelect} accordion>
           {
-            this.state.blocks.map((item) => (
-              <Panel header={"Block " + item.id} eventKey={item.id} key={item.id}>block data</Panel>
-            ))
+            this.state.blocks.map((item) => {
+              return (
+                <Panel header={"Block " + item.id} eventKey={item.id} key={item.id}>
+                  <p>Hash: {item.hash}</p>
+                  <p>Luck: {item.luck}</p>
+                  <p>Parent: {item.parent}</p>
+                  <p>{JSON.stringify(item.attestation, null, " ")}</p>
+                  <p>{JSON.stringify(item.transactions)}</p>
+                </Panel>
+              );
+            })
           }
         </PanelGroup>
       </Panel>
