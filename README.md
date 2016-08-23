@@ -6,7 +6,6 @@ This library has the following system dependencies:
 
 * nodejs
 * ipfs
-* foreman
 
 Start by installing nodejs:
 ```
@@ -18,12 +17,6 @@ Next, install ipfs by [downloading](https://ipfs.io/docs/install/) the package, 
 ```
 tar xvfz go-ipfs.tar.gz
 mv go-ipfs/ipfs /usr/local/bin/ipfs
-```
-
-Next, install foreman:
-```
-sudo apt-get install rubygems-integration
-sudo gem install foreman
 ```
 
 After installing the aformentioned system dependencies, install the node dependencies:
