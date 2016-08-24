@@ -6,17 +6,12 @@
     "build-js": "browserify -dt reactify ./src/js/browser-app.js -o ./public/javascripts/bundle.js -v",
     "build-css": "cat ./public/stylesheets/styles/*.css > ./public/stylesheets/bundle.css",
     "build": "npm run build-js && npm run build-css",
-    "start": "nf start",
-    "test": "mocha"
+    "start": "nf start"
   },
   "dependencies": {
     "async": "^2.0.1",
     "body-parser": "~1.12.0",
     "browserify": "^13.0.1",
-    "catw": "^1.0.1",
-    "chai": "^3.5.0",
-    "cookie-parser": "~1.3.4",
-    "cookie-session": "^1.1.0",
     "cors": "^2.7.1",
     "cron": "^1.1.0",
     "debug": "^2.1.3",
@@ -25,17 +20,14 @@
     "express": "~4.12.2",
     "foreman": "^1.4.1",
     "ipfs-api": "^4.0.2",
-    "mime-db": "^1.20.0",
-    "mocha": "^2.5.3",
-    "morgan": "~1.5.1",
+    "mime-db": "^1.23.0",
     "oboe": "^2.1.2",
-    "react": "^15.2.1",
-    "react-bootstrap": "^0.29.5",
-    "react-dom": "^15.2.1",
+    "react": "^0.13.3",
+    "react-bootstrap": "^0.23.0",
+    "react-tools": "^0.13.3",
     "reactify": "^1.1.1",
     "request": "^2.72.0",
-    "underscore": "^1.8.3",
-    "xhr": "^2.2.1"
+    "underscore": "^1.8.3"
   },
   "engines": {
     "node": "5.1.0"

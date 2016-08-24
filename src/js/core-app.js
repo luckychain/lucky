@@ -148,6 +148,7 @@ var coreApp = function (options) {
                         payload: 'GENESIS',
                         parent: 'GENESIS',
                         transactions: [] } ];
+            console.log("Publishing local state...");
             ipfsPeerPublish().then((path) => {
               CRON_ON = true;
               console.log("Successful initialization, starting...");
@@ -163,6 +164,7 @@ var coreApp = function (options) {
               block = parseIPFSObject(newBlock.toString());
               ipfsConstructChain(blockHash).then((newChain) => {
                 chain = newChain;
+                console.log("Publishing local state...");
                 ipfsPeerPublish().then((path) => {
                   CRON_ON = true;
                   console.log("Successful initialization, starting...");
@@ -1036,6 +1038,10 @@ var coreApp = function (options) {
 
   app.get("/chain", function (req, res, next) {
     res.status(200).json({ chain: chain });
+  });
+
+  app.get("/peers", function (req, res, next) {
+    res.status(200).json({ peers: peers });
   });
 
   app.get("/", function (req, res, next) {

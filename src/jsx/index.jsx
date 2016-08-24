@@ -5,16 +5,12 @@ var Col = require('react-bootstrap/lib/Col');
 var Panel = require('react-bootstrap/lib/Panel');
 var PanelGroup = require('react-bootstrap/lib/PanelGroup');
 var PageHeader = require('react-bootstrap/lib/PageHeader');
-
 var Button = require('react-bootstrap/lib/Button');
-
-var ButtonInput = require('react-bootstrap/lib/ButtonInput');
-var ButtonToolbar = require('react-bootstrap/lib/ButtonToolbar');
-
-var Form = require('react-bootstrap/lib/Form');
+var Well = require('react-bootstrap/lib/Well');
+var Input = require('react-bootstrap/lib/Input');
 var FormGroup = require('react-bootstrap/lib/FormGroup');
-var FormControl = require('react-bootstrap/lib/FormControl');
-var ControlLabel = require('react-bootstrap/lib/ControlLabel');
+// var FormControl = require('react-bootstrap/lib/FormControl');
+// var ControlLabel = require('react-bootstrap/lib/ControlLabel');
 
 var request = require('request');
 
@@ -76,11 +72,11 @@ var Blockchain = React.createClass({
             this.state.blocks.map((item) => {
               return (
                 <Panel header={"Block " + item.id} eventKey={item.id} key={item.id}>
-                  <p>Hash: {item.hash}</p>
-                  <p>Luck: {item.luck}</p>
-                  <p>Parent: {item.parent}</p>
-                  <p>{JSON.stringify(item.attestation, null, " ")}</p>
-                  <p>{JSON.stringify(item.transactions)}</p>
+                  <p><strong>Hash:</strong> {item.hash}</p>
+                  <p><strong>Luck:</strong> {item.luck}</p>
+                  <p><strong>Parent:</strong> {item.parent}</p>
+                  <p><strong>Attestation:</strong> {JSON.stringify(item.attestation, null, 2)}</p>
+                  <p><strong>Transactions:</strong> {JSON.stringify(item.transactions, null, 2)}</p>
                 </Panel>
               );
             })
@@ -126,15 +122,9 @@ var Publish = React.createClass({
     return (
       <Panel>
         <PageHeader>Publish</PageHeader>
-        <Form>
+        <form>
           <FormGroup controlId="formControlsTextarea">
-            <ControlLabel>Transaction</ControlLabel>
-            <FormControl
-              type="text"
-              value={this.state.value}
-              componentClass="textarea"
-              onChange={this.handleChange}
-            />
+            <Input type="text" componentClass="textarea" value={this.state.value} onChange={this.handleChange} label='Transaction' />
           </FormGroup>
           <FormGroup>
             <center>
@@ -143,14 +133,64 @@ var Publish = React.createClass({
               </Button>
             </center>
           </FormGroup>
-        </Form>
+        </form>
+      </Panel>
+    );
+  }
+});
+
+var Peers = React.createClass({
+  getInitialState() {
+    return {
+      peers: []
+    };
+  },
+
+  componentDidMount: function() {
+    this.getPeers();
+  },
+
+  getPeers: function() {
+    var that = this;
+    var url = baseURL + '/peers';
+    request({
+      url: url, 
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    }, function (error, response, body) {
+      if (body) {
+        var body = JSON.parse(body);
+
+        var peers = [];
+        for (var i = 0; i < body.peers.length; i++) {
+          peers.push({ id: i, address: body.peers[i] });
+        }
+
+        that.setState({ peers: peers });
+      }
+    });
+  },
+
+  render: function() {
+    return (
+      <Panel>
+        <PageHeader>Peers</PageHeader>
+        {
+          this.state.peers.map((item) => {
+            return (
+              <Well key={item.id}>
+                <h4>Peer {item.id}</h4>
+                <p>{item.address}</p>
+              </Well>
+            );
+          })
+        }
       </Panel>
     );
   }
 });
 
 var Index = React.createClass({
-
   render: function() {
     return (
       <div className="container">
@@ -158,7 +198,8 @@ var Index = React.createClass({
           <Blockchain />
         </Col>
         <Col md={4} lg={4} xl={4}>
-          <Publish />
+         <Publish />
+         <Peers />
         </Col>
       </div>
     );
