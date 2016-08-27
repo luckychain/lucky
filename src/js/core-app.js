@@ -130,49 +130,49 @@ var coreApp = function (options) {
         } else {
           transactions = JSON.parse(res.toString());
         }
-      });
 
-      /* Load local block (chain head) state */
-      fs.readFile(BLOCK_DIRECTORY, function (err, res) {
-        console.log("Initializing local block state...");
-        if (err || !validObject(res.toString())) {
-          var data = JSON.stringify({ luck: -1, attestation: "GENESIS" });
-          var newBlock = { Data: data, Links: [{ name: "payload", hash: "GENESIS" }] };
-          ipfsWriteBlock(newBlock).then((newBlockHash) => {
-            fs.writeFile(BLOCK_DIRECTORY, newBlockHash, null);
-            block = newBlock;
-            blockHash = newBlockHash;
-            chain = [ { luck: -1,
-                        attestation: 'GENESIS',
-                        hash: 'GENESIS',
-                        payload: 'GENESIS',
-                        parent: 'GENESIS',
-                        transactions: [] } ];
-            console.log("Publishing local state...");
-            ipfsPeerPublish().then((path) => {
-              CRON_ON = true;
-              console.log("Successful initialization, starting...");
-            });
-          });
-        } else {
-          blockHash = res.toString();
-          ipfs.object.data(blockHash, { enc: "base58" }, (err, newBlock) => {
-            if (err || !validData(newBlock.toString(), "/block")) {
-              logger("initializeLocalState error: ipfs.object.data failed");
-              logger(err);
-            } else {
-              block = parseIPFSObject(newBlock.toString());
-              ipfsConstructChain(blockHash).then((newChain) => {
-                chain = newChain;
-                console.log("Publishing local state...");
-                ipfsPeerPublish().then((path) => {
-                  CRON_ON = true;
-                  console.log("Successful initialization, starting...");
-                });
+        /* Load local block (chain head) state */
+        fs.readFile(BLOCK_DIRECTORY, function (err, res) {
+          console.log("Initializing local block state...");
+          if (err || !validObject(res.toString())) {
+            var data = JSON.stringify({ luck: -1, attestation: "GENESIS" });
+            var newBlock = { Data: data, Links: [{ name: "payload", hash: "GENESIS" }] };
+            ipfsWriteBlock(newBlock).then((newBlockHash) => {
+              fs.writeFile(BLOCK_DIRECTORY, newBlockHash, null);
+              block = newBlock;
+              blockHash = newBlockHash;
+              chain = [ { luck: -1,
+                          attestation: 'GENESIS',
+                          hash: 'GENESIS',
+                          payload: 'GENESIS',
+                          parent: 'GENESIS',
+                          transactions: [] } ];
+              console.log("Publishing local state...");
+              ipfsPeerPublish().then((path) => {
+                CRON_ON = true;
+                console.log("Successful initialization, starting...");
               });
-            }
-          });
-        }
+            });
+          } else {
+            blockHash = res.toString();
+            ipfs.object.data(blockHash, { enc: "base58" }, (err, newBlock) => {
+              if (err || !validData(newBlock.toString(), "/block")) {
+                logger("initializeLocalState error: ipfs.object.data failed");
+                logger(err);
+              } else {
+                block = parseIPFSObject(newBlock.toString());
+                ipfsConstructChain(blockHash).then((newChain) => {
+                  chain = newChain;
+                  console.log("Publishing local state...");
+                  ipfsPeerPublish().then((path) => {
+                    CRON_ON = true;
+                    console.log("Successful initialization, starting...");
+                  });
+                });
+              }
+            });
+          }
+        });
       });
     })
     .catch((err) => {
@@ -180,17 +180,16 @@ var coreApp = function (options) {
     });
   }
 
-  var LOG_HEAD = "====================================";
   var LOG_DATA = "----------------------------------------------------------------------";
 
   function printInterval() {
-    console.log(LOG_HEAD, "INTERVAL - TIME: " + ROUND_TIME + " SECONDS", LOG_HEAD);
+    console.log("<===== INTERVAL - TIME: " + ROUND_TIME + " SECONDS =====>");
     console.log("Current list of peers: ");
     console.log(JSON.stringify(peers, null, " "));
   }
 
   function printPubSub() {
-    console.log(LOG_HEAD, "PUBSUB - TIME: " + PUBSUB_TIME + " SECONDS", LOG_HEAD);
+    console.log("<===== PUBSUB - TIME: " + PUBSUB_TIME + " SECONDS =====>");
   }
 
   /* Prints debug relevant messages */
@@ -788,13 +787,13 @@ var coreApp = function (options) {
       for (var i = 0; i < testChain.length; i++) {
         var testBlock = testChain[i];
         var report = sgxReportData(testBlock.attestation);
+
         // dlog(testBlock);
         // dlog(report);
-
-        // logger(!validObject(testBlock))
-        // logger(testBlock.parent !== previousBlockHash)
-        // logger(!sgxValidAttestation(testBlock.attestation))
-        // logger(testBlock.payload !== "GENESIS" && report.nonce !== testBlock.payload)
+        // dlog(!validObject(testBlock))
+        // dlog(testBlock.parent !== previousBlockHash)
+        // dlog(!sgxValidAttestation(testBlock.attestation))
+        // dlog(testBlock.payload !== "GENESIS" && report.nonce !== testBlock.payload)
 
         if (!validObject(testBlock)) return false;
         else if (testBlock.parent !== previousBlockHash) return false;
@@ -968,6 +967,7 @@ var coreApp = function (options) {
 
   /* Interval Updates - find peers and publish commits */
   var interval = new cron("*/" + ROUND_TIME + " * * * * *", function() {
+
     if (CRON_ON) {
       printInterval();
 
@@ -992,6 +992,9 @@ var coreApp = function (options) {
           ipfsBlock.transactions = newTransactionLinks;
 
           newChain.push(ipfsBlock);
+
+          logger("commit valid: " + validChain(newChain));
+          logger("commit luckier: " + luckier(newChain, chain));
 
           if (!validChain(newChain) || !luckier(newChain, chain)) console.log("Commit rejected");
           else {
