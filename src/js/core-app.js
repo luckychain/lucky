@@ -455,7 +455,7 @@ var coreApp = function (options) {
     });
   }
 
-  /* Writes the uncommited transactions to local storage and publishes for peers */
+  /* Writes the uncommited transactions to local storage */
   function ipfsWriteTransactions() {
     return new Promise((resolve) => {
       var transactionsString = JSON.stringify(transactions, null, 2);
@@ -464,7 +464,6 @@ var coreApp = function (options) {
           logger("error: ipfsWriteTransactions failed");
           logger(err);
         } else {
-          ipfsPeerPublish();
           logger("ipfsWriteTransactions publish");
           resolve();
         }
@@ -868,6 +867,7 @@ var coreApp = function (options) {
                     });
                     if (i === newChain.length - 1) {
                       ipfsWriteTransactions();
+                      ipfsPeerPublish();
                       block = newBlock;
                       chain = newChain;
                       blockHash = newBlockHash;
@@ -915,6 +915,7 @@ var coreApp = function (options) {
         if (newTransactionLinks.length > 0) {
           transactions.Links = _.union(transactions.Links, newTransactionLinks);
           ipfsWriteTransactions();
+          ipfsPeerPublish();
           console.log(transactions);
         }
       });
@@ -959,8 +960,6 @@ var coreApp = function (options) {
           }
         });
       }).catch((err) => {
-        transactions.Links = _.union(newTransactionLinks, transactions.Links);
-        ipfsWriteTransactions();
         console.log("Commit failed");
         console.log(err);
       });
@@ -969,16 +968,15 @@ var coreApp = function (options) {
 
   /* Interval Updates - find peers and publish commits */
   var interval = new cron("*/" + ROUND_TIME + " * * * * *", function() {
-    // if (peers.length === 0) ipfsPeerID().then(ipfsPeerDiscovery);
-
     if (CRON_ON) {
       printInterval();
+
+      /* Discover peers */
+      if (peers.length === 0) ipfsPeerID().then(ipfsPeerDiscovery);
 
       /* Construct a new commit to update block head */
       if (transactions.Links.length > COMMIT_THRESHOLD) {
         var newTransactionLinks = transactions.Links.slice();
-        transactions.Links = [];
-        ipfsWriteTransactions();
 
         commit(newTransactionLinks).then((commitObject) => {
           var newBlock = commitObject.block;
@@ -995,13 +993,13 @@ var coreApp = function (options) {
 
           newChain.push(ipfsBlock);
 
-          if (!validChain(newChain) || !luckier(newChain, chain)) {
-            transactions.Links = _.union(newTransactionLinks, transactions.Links);
-            ipfsWriteTransactions();
-            console.log("Commit rejected");
-          } else {
+          if (!validChain(newChain) || !luckier(newChain, chain)) console.log("Commit rejected");
+          else {
             console.log("Commit accepted, writing block...");
             console.log(newBlock);
+
+            transactions.Links = [];
+            ipfsWriteTransactions();
 
             ipfsWriteBlockHash(newBlockHash).then(() => {
               console.log("Commit successful");
