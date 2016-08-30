@@ -84,6 +84,7 @@ var coreApp = function (options) {
   /* Client Parameters */
   var ROUND_TIME = 10; /* Time in seconds */
   var PUBSUB_TIME = 5; /* Pubsub "polling" interval */
+  var PUBSUB_QUERY_PEERS = 5; /* Pubsub number of peers to connect to */
   var COMMIT_THRESHOLD = 0; /* Minimum number of transactions to trigger commit */
   var CRON_ON = false; /* System state */
 
@@ -189,7 +190,7 @@ var coreApp = function (options) {
   }
 
   function printPubSub() {
-    console.log("<===== PUBSUB - TIME: " + PUBSUB_TIME + " SECONDS =====>");
+    console.log("<=== PUBSUB - TIME: " + PUBSUB_TIME + " SECONDS ===>");
   }
 
   /* Prints debug relevant messages */
@@ -283,7 +284,7 @@ var coreApp = function (options) {
   function ipfsPeerSwarm(peerID) {
     /* Ignore error as peer may no longer exist while dht.findprovs still exists. */
     ipfs.id(peerID, (err, res) => {
-      if (!err) {
+      if (!err && validObject(res.Addresses)) {
         console.log("Dialing " + peerID + "...");
         var transports = res.Addresses;
         var connected = false;
@@ -338,6 +339,7 @@ var coreApp = function (options) {
     return new Promise((resolve) => {
       ipfs.name.resolve(id, null, (err, nameRes) => {
         if (err) {
+          peers = _.without(peers, id);
           logger("ipfsPeerResolve error: ipfs.name.resolve failed for " + id);
           logger(err);
         } else {
@@ -586,7 +588,7 @@ var coreApp = function (options) {
     console.log("sgxSleep: " + fl + " seconds");
     setTimeout(function() {
       callback();
-    }, fl);
+    }, fl * 1000);
   }
 
   /* Returns the internal counter value from SGX */
@@ -841,7 +843,8 @@ var coreApp = function (options) {
   function pubSubChain() {
     logger("pubSubChain");
 
-    peers.forEach((peer) => {
+    var pubSubPeers = peers.slice(0, PUBSUB_QUERY_PEERS);
+    pubSubPeers.forEach((peer) => {
       ipfsPeerResolve(peer).then((path) => {
         return ipfsGetData(path, "/block");
       }).then((blockData) => {
@@ -885,8 +888,9 @@ var coreApp = function (options) {
   function pubSubTransactions() {
     logger("pubSubTransactions");
 
-    /* Get all peer transaction links */
-    var peerPromises = peers.map((peer) => {
+    /* Get peer transaction links */
+    var pubSubPeers = peers.slice(0, PUBSUB_QUERY_PEERS);
+    var peerPromises = pubSubPeers.map((peer) => {
       return new Promise((resolve) => {
         ipfsPeerResolve(peer).then((path) => {
           return ipfsGetData(path, "/transactions")
