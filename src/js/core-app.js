@@ -82,11 +82,10 @@ var coreApp = function (options) {
 /****************************** INITIALIZATION *******************************/
 
   /* Client Parameters */
-  var ROUND_TIME = 10; /* Time in seconds */
+  var ROUND_TIME = 15; /* Time in seconds */
   var PUBSUB_TIME = 5; /* Pubsub "polling" interval */
   var PUBSUB_QUERY_PEERS = 5; /* Pubsub number of peers to connect to */
   var COMMIT_THRESHOLD = 0; /* Minimum number of transactions to trigger commit */
-  var CRON_ON = false; /* System state */
 
   /* Storage */
   var STORAGE_DIRECTORY = "storage";
@@ -95,11 +94,15 @@ var coreApp = function (options) {
   var TRANSACTIONS_DIRECTORY = STORAGE_DIRECTORY + "/transactions";
 
   /* Blockchain */
+  var CRON_ON = false; /* System state */
   var peers = [];
   var block = {};
   var blockHash = "";
   var transactions = {};
   var chain = [];
+
+  /* PubSub */
+  var seenBlockHashes = [];
 
   /* SGX */
   var sgxInternalCounter = 1;
@@ -618,10 +621,6 @@ var coreApp = function (options) {
     }
   }
 
-  // function sgxProofOfOwnership(nonce) {
-  //   return sgxReport(nonce);
-  // }
-
   // function sgxProofOfTime(nonce, duration) {
   //   sgxSleep(duration, function() {
   //     var newCounter = sgxReadMonotonicCounter();
@@ -629,24 +628,6 @@ var coreApp = function (options) {
   //       return sgxReport(nonce, duration);
   //     }
   //   });
-  // }
-
-
-  // function originalProofOfWork(nonce, difficulty) {
-  //   /* Todo: determine PoW */
-  //   return true;
-  // }
-
-  // function originalProofOfWorkSuccess(proofOfWork) {
-  //   /* Todo: determine PoW success */
-  //   return true;
-  // }
-
-  // function sgxProofOfWork(nonce, difficulty) {
-  //   var result = originalProofOfWork(nonce, difficulty);
-  //   if (originalProofOfWorkSuccess(result)) {
-  //     return sgxReport(nonce, difficulty);
-  //   }
   // }
 
 /*********************************** PROOF ***********************************/
@@ -659,18 +640,8 @@ var coreApp = function (options) {
     });
   }
 
-  // function proofOfOwnership(nonce) {
-  //   var report = sgxProofOfOwnership(nonce);
-  //   return sgxQuote(report, nonce);
-  // }
-
   // function proofOfTime(nonce, duration) {
   //   var report = sgxProofOfTime(nonce, duration);
-  //   return sgxQuote(report, null);
-  // }
-
-  // function proofOfWork(nonce, difficulty) {
-  //   var report = sgxProofOfWork(nonce, difficulty);
   //   return sgxQuote(report, null);
   // }
 
@@ -851,9 +822,11 @@ var coreApp = function (options) {
         var newBlock = blockData.block;
         var newBlockHash = blockData.blockHash;
 
-        if (!equal(newBlock, block)) {
-          logger("pubSubChain: new block from peer");
+        if (!containsObject(newBlockHash, seenBlockHashes) && !equal(newBlock, block)) {
+          logger("pubSubChain: received new block from peer");
           ipfsConstructChain(newBlockHash).then((newChain) => {
+            seenBlockHashes.push(newBlockHash);
+            
             /* Check if newChain is luckier than our current chain */
             if (validChain(newChain) && luckier(newChain, chain)) {
               logger("pubSubChain: found luckier block");

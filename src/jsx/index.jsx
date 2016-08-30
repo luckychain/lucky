@@ -9,8 +9,6 @@ var Button = require('react-bootstrap/lib/Button');
 var Well = require('react-bootstrap/lib/Well');
 var Input = require('react-bootstrap/lib/Input');
 var FormGroup = require('react-bootstrap/lib/FormGroup');
-// var FormControl = require('react-bootstrap/lib/FormControl');
-// var ControlLabel = require('react-bootstrap/lib/ControlLabel');
 
 var request = require('request');
 
@@ -71,12 +69,17 @@ var Blockchain = React.createClass({
           {
             this.state.blocks.map((item) => {
               return (
-                <Panel header={"Block " + item.id} eventKey={item.id} key={item.id}>
-                  <p><strong>Hash:</strong> {item.hash}</p>
+                <Panel header={"Block " + item.id + ": " + item.hash} eventKey={item.id} key={item.id}>
                   <p><strong>Luck:</strong> {item.luck}</p>
                   <p><strong>Parent:</strong> {item.parent}</p>
                   <p><strong>Attestation:</strong> {JSON.stringify(item.attestation, null, 2)}</p>
-                  <p><strong>Transactions:</strong> {JSON.stringify(item.transactions, null, 2)}</p>
+                  <p><strong>Transactions:</strong>
+                    {
+                      item.transactions.map((tx) => {
+                        return (<p>{tx.hash}</p>);
+                      })
+                    }
+                  </p>
                 </Panel>
               );
             })
@@ -193,11 +196,11 @@ var Peers = React.createClass({
 var Index = React.createClass({
   render: function() {
     return (
-      <div className="container">
-        <Col md={8} lg={8} xl={8}>
+      <div>
+        <Col md={7} lg={7} xl={7}>
           <Blockchain />
         </Col>
-        <Col md={4} lg={4} xl={4}>
+        <Col md={5} lg={5} xl={5}>
          <Publish />
          <Peers />
         </Col>
