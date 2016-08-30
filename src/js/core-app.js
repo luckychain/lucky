@@ -98,11 +98,9 @@ var coreApp = function (options) {
   var peers = [];
   var block = {};
   var blockHash = "";
+  var lastBlockHash = "";
   var transactions = {};
   var chain = [];
-
-  /* PubSub */
-  var seenBlockHashes = [];
 
   /* SGX */
   var sgxInternalCounter = 1;
@@ -621,16 +619,7 @@ var coreApp = function (options) {
     }
   }
 
-  // function sgxProofOfTime(nonce, duration) {
-  //   sgxSleep(duration, function() {
-  //     var newCounter = sgxReadMonotonicCounter();
-  //     if (counter === newCounter) {
-  //       return sgxReport(nonce, duration);
-  //     }
-  //   });
-  // }
-
-/*********************************** PROOF ***********************************/
+/********************************** CHAIN ************************************/
 
   /* Returns proof containing attestation and luck */
   function proofOfLuck(nonce, callback) {
@@ -639,13 +628,6 @@ var coreApp = function (options) {
       else callback(null, sgxQuote(report));
     });
   }
-
-  // function proofOfTime(nonce, duration) {
-  //   var report = sgxProofOfTime(nonce, duration);
-  //   return sgxQuote(report, null);
-  // }
-
-/********************************** CHAIN ************************************/  
 
   /* Returns true if tx is contained in current chain - a spent transaction */
   function spentTransaction(tx) {
@@ -822,11 +804,11 @@ var coreApp = function (options) {
         var newBlock = blockData.block;
         var newBlockHash = blockData.blockHash;
 
-        if (!containsObject(newBlockHash, seenBlockHashes) && !equal(newBlock, block)) {
+        if (!equal(newBlockHash, lastBlockHash) && !equal(newBlock, block)) {
           logger("pubSubChain: received new block from peer");
           ipfsConstructChain(newBlockHash).then((newChain) => {
-            seenBlockHashes.push(newBlockHash);
-            
+            lastBlockHash = newBlockHash;
+
             /* Check if newChain is luckier than our current chain */
             if (validChain(newChain) && luckier(newChain, chain)) {
               logger("pubSubChain: found luckier block");
