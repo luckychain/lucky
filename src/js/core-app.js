@@ -98,9 +98,11 @@ var coreApp = function (options) {
   var peers = [];
   var block = {};
   var blockHash = "";
-  var lastBlockHash = "";
   var transactions = {};
   var chain = [];
+
+  /* PubSub */
+  var seenBlockHashes = [];
 
   /* SGX */
   var sgxInternalCounter = 1;
@@ -363,7 +365,9 @@ var coreApp = function (options) {
           catRes.on("end", () => {
             if (chunks.length > 0) {
               var data = chunks.join("");
-              if (link === "/block" && validObject(data)) {
+              if (link === "/block"
+                  && validObject(data)
+                  && !containsObject(newBlockHash, seenBlockHashes)) {
                 var newBlockHash = data;
                 ipfs.object.data(newBlockHash, { enc: "base58" }, (err, newData) => {
                   if (err || !validData(newData.toString(), link)) {
@@ -371,12 +375,12 @@ var coreApp = function (options) {
                     logger(err);
                   } else {
                     var newBlock = parseIPFSObject(newData.toString());
-                    loggerData(newBlock, path, link);
+                    // loggerData(newBlock, path, link);
                     resolve({ block: newBlock, blockHash: newBlockHash });
                   }
                 });
-              } else { /* Transaction data */
-                loggerData(data, path, link);
+              } else if (link === "/transactions") { /* Transaction data */
+                // loggerData(data, path, link);
                 if (validData(data, link)) {
                   if (typeof data === "string") data = JSON.parse(data);
                   resolve(data);
@@ -804,10 +808,10 @@ var coreApp = function (options) {
         var newBlock = blockData.block;
         var newBlockHash = blockData.blockHash;
 
-        if (!equal(newBlockHash, lastBlockHash) && !equal(newBlock, block)) {
+        if (!containsObject(newBlockHash, seenBlockHashes) && !equal(newBlock, block)) {
           logger("pubSubChain: received new block from peer");
           ipfsConstructChain(newBlockHash).then((newChain) => {
-            lastBlockHash = newBlockHash;
+            seenBlockHashes.push(newBlockHash);
 
             /* Check if newChain is luckier than our current chain */
             if (validChain(newChain) && luckier(newChain, chain)) {
