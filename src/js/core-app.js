@@ -147,7 +147,7 @@ var coreApp = function (options) {
               blockHash = newBlockHash;
               chain = [ { luck: -1,
                           attestation: 'GENESIS',
-                          hash: 'GENESIS',
+                          hash: blockHash,
                           payload: 'GENESIS',
                           parent: 'GENESIS',
                           transactions: [] } ];
