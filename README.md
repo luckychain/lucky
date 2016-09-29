@@ -51,7 +51,7 @@ If you wish to develop on your own ipfs network of peers, go into `storage/id` a
 
 To test that the server is working, start the application and run:
 ```
-$ curl localhost:5001/echo?message='hello'
+$ curl localhost:8000/echo?message='hello'
 {"message":"hello","datetime":"2016-06-19T01:08:16.979Z"}
 ```
 
