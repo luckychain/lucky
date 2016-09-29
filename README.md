@@ -15,7 +15,7 @@ sudo apt-get install -y nodejs
 
 Next, install ipfs with one of two options:
 
-1. [Download](https://ipfs.io/docs/install/) the prebuilt package, then run:
+1. Download the [prebuilt package](https://ipfs.io/docs/install/), then run:
 ```
 tar xvfz go-ipfs.tar.gz
 mv go-ipfs/ipfs /usr/local/bin/ipfs
