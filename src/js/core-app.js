@@ -16,7 +16,7 @@ var coreApp = function (options) {
    * [
    *   {
    *     luck: 1208,
-   *     attestation: "<SGX signature>",
+   *     attestation: "<TEE signature>",
    *     hash: "<address of the block>",
    *     parent: "<address of the parent block>",
    *     transactions: [{
@@ -33,7 +33,7 @@ var coreApp = function (options) {
    * {
    *   Data: {
    *     luck: 1208
-   *     attestation: "<SGX signature>"
+   *     attestation: "<TEE signature>"
    *   }
    *   Links: [{
    *     name: "payload",
@@ -85,13 +85,12 @@ var coreApp = function (options) {
   var ROUND_TIME = 15; /* Time in seconds */
   var PUBSUB_TIME = 5; /* Pubsub "polling" interval */
   var PUBSUB_QUERY_PEERS = 5; /* Pubsub number of peers to connect to */
-  var COMMIT_THRESHOLD = 0; /* Minimum number of transactions to trigger commit */
 
   /* Storage */
-  var STORAGE_DIRECTORY = "storage";
-  var ID_DIRECTORY = STORAGE_DIRECTORY + "/id";
-  var BLOCK_DIRECTORY = STORAGE_DIRECTORY + "/block";
-  var TRANSACTIONS_DIRECTORY = STORAGE_DIRECTORY + "/transactions";
+  var DIRECTORY = "storage";
+  var ID_DIRECTORY = DIRECTORY + "/id";
+  var BLOCK_DIRECTORY = DIRECTORY + "/block";
+  var TRANSACTIONS_DIRECTORY = DIRECTORY + "/transactions";
 
   /* Blockchain */
   var CRON_ON = false; /* System state */
@@ -104,10 +103,11 @@ var coreApp = function (options) {
   /* PubSub */
   var seenBlockHashes = [];
 
-  /* SGX */
-  var sgxInternalCounter = 1;
-  var counter = sgxIncrementMonotonicCounter();
-  var lastTime = sgxGetTrustedTime();
+  /* TEE */
+  var teeInternalCounter = 1;
+  var counter = teeIncrementMonotonicCounter();
+  var roundBlock = null;
+  var roundTime = null;
 
   /* IPFS */
   var IPFS_ID = "";
@@ -187,7 +187,7 @@ var coreApp = function (options) {
   var LOG_DATA = "----------------------------------------------------------------------";
 
   function printInterval() {
-    console.log("<===== INTERVAL - TIME: " + ROUND_TIME + " SECONDS =====>");
+    console.log("<===== ROUND - TIME: " + ROUND_TIME + " SECONDS =====>");
     console.log("Current list of peers: ");
     console.log(JSON.stringify(peers, null, " "));
   }
@@ -232,18 +232,6 @@ var coreApp = function (options) {
       if (equal(obj, array[i])) return true;
       else if (i === array.length - 1) return false;
     }
-  }
-
-/****************************** ERROR HANDLING *******************************/
-
-  /* Sends an error 400 for invalid query parameter */
-  function invalidError(res) {
-    res.status(400).json({ error: "invalid query params" });
-  }
-
-  /* Sends an error 400 for invalid transaction submission */
-  function invalidTransactionLink(res) {
-    res.status(400).json({ error: "invalid transaction submission" });
   }
 
 /****************************** PEER DISCOVERY *******************************/
@@ -293,8 +281,7 @@ var coreApp = function (options) {
         var connected = false;
 
         transports.forEach((transport) => {
-          var address = transport + "/ipfs/" + peerID;
-          ipfs.swarm.connect(address).then((res) => {
+          ipfs.swarm.connect(transport + "/ipfs/" + peerID).then((res) => {
             if (!connected && res.Strings[0].indexOf("success") !== -1) {
               connected = true;
               peers.push(peerID);
@@ -309,19 +296,16 @@ var coreApp = function (options) {
 
 /*********************************** IPNS ************************************/
 
-  /* Publish the files under STORAGE_DIRECTORY using IPNS */
+  /* Publish the files under DIRECTORY using IPNS */
   function ipfsPeerPublish() {
     logger("ipfsPeerPublish");
     return new Promise((resolve) => {
-      ipfs.add(STORAGE_DIRECTORY, { recursive: true }, (err, addRes) => {
+      ipfs.add(DIRECTORY, { recursive: true }, (err, addRes) => {
         if (err) {
           logger("error: ipfsPeerPublish failed");
           logger(err);
         } else {
-          var hash = addRes.filter((path) => {
-            return path.Name === STORAGE_DIRECTORY;
-          })[0].Hash;
-
+          var hash = addRes.filter((path) => { return path.Name === DIRECTORY; })[0].Hash;
           ipfs.name.publish(hash, null, (err, publishRes) => {
             if (err) {
               logger("ipfsPeerPublish error: ipfs.name.publish failed");
@@ -345,9 +329,7 @@ var coreApp = function (options) {
           peers = _.without(peers, id);
           logger("ipfsPeerResolve error: ipfs.name.resolve failed for " + id);
           logger(err);
-        } else {
-          resolve(nameRes.Path);
-        }
+        } else resolve(nameRes.Path);
       });
     });
   }
@@ -538,27 +520,26 @@ var coreApp = function (options) {
           });
         },
         function (err, newChain) {
-          if (err) logger(err);
-          else resolve(newChain);
+          err ? logger(err) : resolve(newChain);
         }
       );
     });
   }
 
-/*********************************** SGX *************************************/
+/*********************************** TEE *************************************/
 
-  /* Returns a secure quote from SGX */
-  function sgxQuote(report) {
+  /* Returns a secure quote from TEE */
+  function teeQuote(report) {
     return { report: report, luck: report.luck };
   }
 
-  /* Returns a secure report from SGX */
-  function sgxReport(nonce, luck) {
+  /* Returns a secure report from TEE */
+  function teeReport(nonce, luck) {
     return { nonce: nonce, luck: luck };
   }
 
-  /* Returns secure report data from SGX */
-  function sgxReportData(data) {
+  /* Returns secure report data from TEE */
+  function teeReportData(data) {
     if (validObject(data)) {
       if (data === "GENESIS") return { nonce: "GENESIS", luck: -1 };
       else {
@@ -569,77 +550,36 @@ var coreApp = function (options) {
     }
   }
 
-  /* Returns true if SGX proof is valid */
-  function sgxValidAttestation(attestation) {
+  /* Returns true if TEE proof is valid */
+  function teeValidAttestation(attestation) {
     if (!validObject(attestation)) return false;
     return true;
   }
 
-  /* Returns the trusted system time from SGX */
-  function sgxGetTrustedTime() {
+  /* Returns the trusted system time from TEE */
+  function teeGetTrustedTime() {
     return currentTimestamp();
   }
 
-  /* Returns a random value on request from SGX */
-  function sgxGetRandom() {
+  /* Returns a random value on request from TEE */
+  function teeGetRandom() {
     var rand = Math.random();
     while (rand === 0) rand = Math.random();
     return 1 / rand;
   }
 
-  /* Generate f(luck), invokes callback after f(luck) time */
-  function sgxSleep(luck, callback) {
-    var fl = (luck / Number.MAX_VALUE) * ROUND_TIME;
-    console.log("sgxSleep: " + fl + " seconds");
-    setTimeout(function() {
-      callback();
-    }, fl * 1000);
+  /* Returns the internal counter value from TEE */
+  function teeReadMonotonicCounter() {
+    return teeInternalCounter;
   }
 
-  /* Returns the internal counter value from SGX */
-  function sgxReadMonotonicCounter() {
-    return sgxInternalCounter;
-  }
-
-  /* Returns the monotonically incremented internal counter value from SGX */
-  function sgxIncrementMonotonicCounter() {
-    sgxInternalCounter++;
-    return sgxInternalCounter;
-  }
-
-  /* Returns a proof of luck given a nonce from SGX */
-  function sgxProofOfLuck(nonce, callback) {
-    var now = sgxGetTrustedTime();
-    if (now < lastTime + ROUND_TIME) callback("sgxProofOfLuck error: time", null);
-    else {
-      lastTime = now;
-      var luck = sgxGetRandom();
-      sgxSleep(luck, function() {
-        console.log("returned from sgxSleep");
-        var newCounter = sgxReadMonotonicCounter();
-        if (counter !== newCounter) callback("sgxProofOfLuck error: counter", null);
-        else callback(null, sgxReport(nonce, luck));
-      });
-    }
+  /* Returns the monotonically incremented internal counter value from TEE */
+  function teeIncrementMonotonicCounter() {
+    teeInternalCounter++;
+    return teeInternalCounter;
   }
 
 /********************************** CHAIN ************************************/
-
-  /* Returns proof containing attestation and luck */
-  function proofOfLuck(nonce, callback) {
-    sgxProofOfLuck(nonce, function(err, report) {
-      if (err) callback("error: proofOfLuck failed", null);
-      else callback(null, sgxQuote(report));
-    });
-  }
-
-  /* Returns true if tx is contained in current chain - a spent transaction */
-  function spentTransaction(tx) {
-    for (var i = 0; i < chain.length; i++) {
-      if (containsObject(tx, chain[i].transactions)) return true;
-      else if (i === chain.length - 1) return false;
-    }
-  }
 
   /* Returns true if obj is defined and has content */
   function validObject(obj) {
@@ -665,9 +605,12 @@ var coreApp = function (options) {
     else {
       if (typeof tx === "string") tx = JSON.parse(tx);
 
+      /* Returns false if tx is contained in current chain or transactions */
       if (containsObject(tx, transactions.Links)) return false;
-      else if (spentTransaction(tx)) return false;
-      else return true;
+      else for (var i = 0; i < chain.length; i++) {
+        if (containsObject(tx, chain[i].transactions)) return false;
+        else if (i === chain.length - 1) return true;
+      }
     }
   }
 
@@ -735,6 +678,102 @@ var coreApp = function (options) {
     }
   }
 
+/********************************* ALGORITHM 4 *******************************/
+
+  function teeProofOfLuckRound(thisBlock) {
+    roundBlock = thisblock;
+    roundTime = teeGetTrustedTime();
+  }
+
+  function teeProofOfLuckMine(header, previousBlock, callback) {
+    if (header.parent !== previousBlock.hash || previousBlock.parent !== roundBlock.parent) {
+      callback("teeProofOfLuckMine error: header and parent mismatch", null);
+    } else {
+      var now = teeGetTrustedTime();
+      if (now < roundTime + ROUND_TIME) callback("teeProofOfLuckMine error: time", null);
+      else {
+        roundBlock = null;
+        roundTime = null;
+        l = teeGetRandom();
+        var fl = (luck / Number.MAX_VALUE) * ROUND_TIME;
+        console.log("teeSleep: " + fl + " seconds");
+
+        setTimeout(function() {
+          console.log("returned from teeSleep");
+          var newCounter = teeReadMonotonicCounter();
+          var nonce = header.hash;
+          if (counter !== newCounter) callback("teeProofOfLuckMine error: counter", null);
+          else callback(null, teeReport(nonce, luck));
+        }, fl * 1000);
+      }
+    } 
+  }
+
+/********************************* ALGORITHM 5 *******************************/
+
+  /* Extending a blockchain with a new block. */
+  function commit(newTransactionLinks) {
+    logger("commit");
+    return new Promise((resolve) => {
+      var newPayload = {};
+      newPayload.Data = "";
+      newPayload.Links = newTransactionLinks.slice();
+      newPayload.Links.push({ name: "parent", hash: blockHash });
+
+      ipfsWritePayload(newPayload).then((nonce) => {
+        teeProofOfLuckMine(nonce, (err, proof) => {
+          if (err) throw err;
+          else {
+            console.log("Commit accepted, writing block...");
+            var newBlock = {
+              Data : { luck: proof.luck, attestation: proof },
+              Links: [{ name: "payload", hash: nonce }]
+            };
+            console.log(newBlock);
+
+            ipfsWriteBlock(newBlock).then((newBlockHash) => {
+              chain.push({
+                luck: newBlock.Data.luck,
+                attestation: newBlock.Data.attestation,
+                hash: newBlockHash,
+                payload: newBlock.Links[0].hash,
+                parent: blockHash,
+                transactions: newTransactionLinks
+              });
+
+              ipfsWriteBlockHash(newBlockHash).then(() => {
+                console.log("Commit successful");
+                block = newBlock;
+                blockHash = newBlockHash;
+              });
+
+              transactions.Links = [];
+              ipfsWriteTransactions();
+              resolve();
+            });
+          }
+        });
+      }).catch((err) => {
+        console.log("Commit failed");
+        console.log(err);
+      });
+    });
+  }
+
+/********************************* ALGORITHM 6 *******************************/
+
+  /* Computing the luck of a valid blockchain. */
+  function luck(thisChain) {
+    var totalLuck = 0;
+    for (var i = 0; i < thisChain.length; i++) {
+      var report = teeReportData(thisChain[i].attestation);
+      if (thisChain[i].payload !== "GENESIS" && report.luck >= 1) totalLuck += report.luck;
+      if (i === thisChain.length - 1) return totalLuck;
+    }
+  }
+
+/********************************* ALGORITHM 7 *******************************/
+
   /* Returns true if the newChain is in accordance to the structure of our specified chain */
   function validChain(newChain) {
     if (!validObject(newChain)) return false;
@@ -745,18 +784,18 @@ var coreApp = function (options) {
       var testChain = newChain.slice();
       for (var i = 0; i < testChain.length; i++) {
         var testBlock = testChain[i];
-        var report = sgxReportData(testBlock.attestation);
+        var report = teeReportData(testBlock.attestation);
 
         // dlog(testBlock);
         // dlog(report);
         // dlog(!validObject(testBlock))
         // dlog(testBlock.parent !== previousBlockHash)
-        // dlog(!sgxValidAttestation(testBlock.attestation))
+        // dlog(!teeValidAttestation(testBlock.attestation))
         // dlog(testBlock.payload !== "GENESIS" && report.nonce !== testBlock.payload)
 
         if (!validObject(testBlock)) return false;
         else if (testBlock.parent !== previousBlockHash) return false;
-        else if (!sgxValidAttestation(testBlock.attestation)) return false;
+        else if (!teeValidAttestation(testBlock.attestation)) return false;
         else if (testBlock.payload !== "GENESIS" && report.nonce !== testBlock.payload) return false;
         else if (i === testChain.length - 1) return true;
         
@@ -765,56 +804,28 @@ var coreApp = function (options) {
     }
   }
 
-  /* Returns the sum of luck values for the given chain */
-  function score(thisChain) {
-    var score = 0;
-    for (var i = 0; i < thisChain.length; i++) {
-      var blockData = thisChain[i];
-      var report = sgxReportData(blockData.attestation);
-      if (blockData.payload !== "GENESIS" && report.luck >= 1) {
-        score += report.luck;
-      }
-      if (i === thisChain.length - 1) return score;
-    }
-  }
+/********************************* ALGORITHM 8 *******************************/
 
-  /* Retruns true if the newChain is luckier than the oldChain */
-  function luckier(newChain, oldChain) {
-    if (newChain.length < oldChain.length) return false;
-    else {
-      var newChainPrefixScore = score(newChain.slice(0, oldChain.length));
-      var oldChainScore = score(oldChain);
-      // dlog("scores: " + newChainPrefixScore + " <= " + oldChainScore);
-      // dlog("length: " + newChain.length + " > " + oldChain.length);
-      if (newChainPrefixScore > oldChainScore) return false;
-      else if (newChainPrefixScore === oldChainScore && newChain.length === oldChain.length) return false;
-      else {
-        logger("luckier: found luckier block");
-        return true;
-      }
-    }
+  function newRound(newChain) {
+    teeProofOfLuckRound(block);
+    resetCallback(ROUND_TIME);
   }
-
-/********************************** PUBSUB ***********************************/
 
   function pubSubChain() {
     logger("pubSubChain");
 
-    var pubSubPeers = peers.slice(0, PUBSUB_QUERY_PEERS);
-    pubSubPeers.forEach((peer) => {
-      ipfsPeerResolve(peer).then((path) => {
-        return ipfsGetData(path, "/block");
-      }).then((blockData) => {
-        var newBlock = blockData.block;
-        var newBlockHash = blockData.blockHash;
+    peers.slice(0, PUBSUB_QUERY_PEERS).forEach((peer) => {
+      ipfsPeerResolve(peer).then((path) => { return ipfsGetData(path, "/block"); }).then((data) => {
+        var newBlock = data.block;
+        var newBlockHash = data.blockHash;
 
         if (!containsObject(newBlockHash, seenBlockHashes) && !equal(newBlock, block)) {
           logger("pubSubChain: received new block from peer");
           ipfsConstructChain(newBlockHash).then((newChain) => {
             seenBlockHashes.push(newBlockHash);
 
-            /* Check if newChain is luckier than our current chain */
-            if (validChain(newChain) && luckier(newChain, chain)) {
+            /* Check if newChain is valid and luckier than our current chain */
+            if (validChain(newChain) && luck(newChain) > luck(oldChain)) {
               logger("pubSubChain: found luckier block");
 
               ipfsWriteBlock(newBlock).then((newBlockHash) => {
@@ -824,14 +835,19 @@ var coreApp = function (options) {
                   for (var i = 0; i < newChain.length; i++) {
                     var txs = newChain[i].transactions;
                     transactions.Links = _.reject(transactions.Links, function(obj) {
-                      return _.find(txs, {luck: obj.luck});
+                      return _.find(txs, { luck: obj.luck });
                     });
                     if (i === newChain.length - 1) {
                       ipfsWriteTransactions();
                       ipfsPeerPublish();
-                      block = newBlock;
                       chain = newChain;
-                      blockHash = newBlockHash;
+                      /* Start a new round of mining */
+                      if (roundBlock === null || roundBlock === undefined) newRound(newChain);
+                      else {
+                        block = newBlock;
+                        blockHash = newBlockHash;
+                        if (block.parent != roundBlock.parent) newRound(newChain);
+                      }
                       console.log("PubSub: Block update successful");
                     }
                   }
@@ -884,6 +900,14 @@ var coreApp = function (options) {
     });
   }
 
+  /* Construct a new commit to update block head */
+  function resetCallback() {
+    var newTransactionLinks = transactions.Links.slice();
+    commit(newTransactionLinks).then(() => {
+      console.log("callback updated");
+    });
+  }
+
   var pubSub = new cron("*/" + PUBSUB_TIME + " * * * * *", function() {
     if (CRON_ON) {
       printPubSub();
@@ -892,90 +916,10 @@ var coreApp = function (options) {
     }
   }, null, true);
 
-/********************************** INTERVAL *********************************/
-
-  /* Construct a new payload and block for commit */
-  function commit(newTransactionLinks) {
-    logger("commit");
-    return new Promise((resolve) => {
-      var newPayload = {}
-      newPayload.Data = "";
-      newPayload.Links = newTransactionLinks.slice();
-      newPayload.Links.push({ name: "parent", hash: blockHash });
-
-      ipfsWritePayload(newPayload).then((payloadHash) => {
-        var nonce = payloadHash;
-        proofOfLuck(nonce, (err, proof) => {
-          if (err) throw err;
-          else {
-            var newBlock = {};
-            newBlock.Data = {};
-            newBlock.Data.luck = proof.luck;
-            newBlock.Data.attestation = proof;
-            newBlock.Links = [];
-            newBlock.Links.push({ name: "payload", hash: payloadHash });
-
-            ipfsWriteBlock(newBlock)
-            .then((newBlockHash) => {
-              resolve({ block: newBlock, hash: newBlockHash });
-            });
-          }
-        });
-      }).catch((err) => {
-        console.log("Commit failed");
-        console.log(err);
-      });
-    });
-  }
-
-  /* Interval Updates - find peers and publish commits */
   var interval = new cron("*/" + ROUND_TIME + " * * * * *", function() {
-
     if (CRON_ON) {
       printInterval();
-
-      /* Discover peers */
       if (peers.length === 0) ipfsPeerID().then(ipfsPeerDiscovery);
-
-      /* Construct a new commit to update block head */
-      if (transactions.Links.length > COMMIT_THRESHOLD) {
-        var newTransactionLinks = transactions.Links.slice();
-
-        commit(newTransactionLinks).then((commitObject) => {
-          var newBlock = commitObject.block;
-          var newBlockHash = commitObject.hash;
-          var newChain = chain.slice();
-
-          var ipfsBlock = {};
-          ipfsBlock.luck = newBlock.Data.luck;
-          ipfsBlock.attestation = newBlock.Data.attestation;
-          ipfsBlock.hash = newBlockHash;
-          ipfsBlock.payload = newBlock.Links[0].hash;
-          ipfsBlock.parent = blockHash;
-          ipfsBlock.transactions = newTransactionLinks;
-
-          newChain.push(ipfsBlock);
-
-          logger("commit valid: " + validChain(newChain));
-          logger("commit luckier: " + luckier(newChain, chain));
-
-          if (!validChain(newChain) || !luckier(newChain, chain)) console.log("Commit rejected");
-          else {
-            console.log("Commit accepted, writing block...");
-            console.log(newBlock);
-
-            transactions.Links = [];
-            ipfsWriteTransactions();
-
-            ipfsWriteBlockHash(newBlockHash).then(() => {
-              console.log("Commit successful");
-              block = newBlock;
-              chain = newChain;
-              blockHash = newBlockHash;
-            });
-          }
-        });
-      }
     }
   }, null, true);
   
@@ -990,7 +934,9 @@ var coreApp = function (options) {
 
       ipfsWritePayload(tx).then((hash) => {
         var transaction_link = { name: "transaction", hash: hash };
-        if (!validTransactionLink(transaction_link)) invalidTransactionLink(res);
+        if (!validTransactionLink(transaction_link)) {
+          res.status(400).json({ error: "invalid transaction submission" });
+        }
         else ipfsWriteTransactionLink(transaction_link).then((path) => {
           console.log("/tx request successful");
           var response = { message: "success", datetime: currentTimestamp() };
@@ -1014,20 +960,6 @@ var coreApp = function (options) {
 
   var server = app.listen(8000, function() {
     console.log("Listening on port %d", server.address().port);
-  });
-
-/************************** TESTING INFRASTRUCTURE ***************************/
-
-  app.get("/echo", function (req, res, next) {
-    var message = req.query.message; /* Gets parameters from URL */
-
-    if (!validObject(message)) invalidError(res); /* Check that message exists */
-    else {
-      console.log("echo successful"); /* Print success to console */
-      var jsonDate = (new Date()).toJSON(); /* Conforms to JS date format */
-      var response = { message: message, datetime: jsonDate }; /* Construct JSON object */
-      res.status(200).json(response); /* Send response to client */
-    }
   });
 
 /*****************************************************************************/
