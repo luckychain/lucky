@@ -681,12 +681,17 @@ var coreApp = function (options) {
 /********************************* ALGORITHM 4 *******************************/
 
   function teeProofOfLuckRound(thisBlock) {
-    roundBlock = thisblock;
+    roundBlock = thisBlock;
     roundTime = teeGetTrustedTime();
   }
 
-  function teeProofOfLuckMine(header, previousBlock, callback) {
-    if (header.parent !== previousBlock.hash || previousBlock.parent !== roundBlock.parent) {
+  function teeProofOfLuckMine(headerHash, headerPayload, previousBlockHash, previousBlockPayload, callback) {
+    headerParent = _.detect(headerPayLoad.Links, function(x) { return x.name == "parent" }).hash;
+    previousBlockParent = _.detect(previousBlockPayload.Links, function(x) { return x.name == "parent" }).hash;
+    // roundBlockParent = _.detect(previousBlockPayload.Links, function(x) { return x.name == "parent" }).hash;
+
+    // todo parent.hash
+    if (headerParent !== previousBlock.hash || previousBlockParent !== roundBlock.parent) {
       callback("teeProofOfLuckMine error: header and parent mismatch", null);
     } else {
       var now = teeGetTrustedTime();
@@ -701,7 +706,7 @@ var coreApp = function (options) {
         setTimeout(function() {
           console.log("returned from teeSleep");
           var newCounter = teeReadMonotonicCounter();
-          var nonce = header.hash;
+          var nonce = headerHash;
           if (counter !== newCounter) callback("teeProofOfLuckMine error: counter", null);
           else callback(null, teeReport(nonce, luck));
         }, fl * 1000);
@@ -721,14 +726,14 @@ var coreApp = function (options) {
       newPayload.Links.push({ name: "parent", hash: blockHash });
 
       ipfsWritePayload(newPayload).then((nonce) => {
-        teeProofOfLuckMine(nonce, (err, proof) => {
+        var newBlock = {
+          Data : { luck: proof.luck, attestation: proof },
+          Links: [{ name: "payload", hash: nonce }]
+        };
+        teeProofOfLuckMine(newBlock, newPayload, block, (err, proof) => {
           if (err) throw err;
           else {
             console.log("Commit accepted, writing block...");
-            var newBlock = {
-              Data : { luck: proof.luck, attestation: proof },
-              Links: [{ name: "payload", hash: nonce }]
-            };
             console.log(newBlock);
 
             ipfsWriteBlock(newBlock).then((newBlockHash) => {
@@ -937,7 +942,7 @@ var coreApp = function (options) {
         if (!validTransactionLink(transaction_link)) {
           res.status(400).json({ error: "invalid transaction submission" });
         }
-        else ipfsWriteTransactionLink(transaction_link).then((path) => {
+        else ipfsWriteTransactionLink(transaction_link).then(() => {
           console.log("/tx request successful");
           var response = { message: "success", datetime: currentTimestamp() };
           res.status(200).json(response);
