@@ -103,7 +103,6 @@ var coreApp = function (options) {
   /* Blockchain */
   var CRON_ON = false; /* System state */
   var roundUpdate = false;
-  var peers = [];
   var block = {};
   var blockHash = "";
   var transactions = {};
@@ -163,7 +162,6 @@ var coreApp = function (options) {
             logger(blockHash);
             logger(JSON.stringify(block, null, " "));
             logger(JSON.stringify(transactions, null, " "));
-            logger(JSON.stringify(peers, null, " "));
             logger(JSON.stringify(chain, null, " "));
 
             CRON_ON = true;
@@ -233,7 +231,7 @@ var coreApp = function (options) {
   function printInterval() {
     console.log("[----- ROUND TIME: " + ROUND_TIME + " SECONDS -----]");
     console.log("Current list of peers: ");
-    console.log(JSON.stringify(peers, null, " "));
+    console.log(JSON.stringify(pubSub.getPeerSet(), null, " "));
   }
 
   /* Prints debug relevant messages */
@@ -281,7 +279,7 @@ var coreApp = function (options) {
         if (err) logger("ipfsGetPayload error: ", err);
         else {
           data = data.toString();
-          if (validPayload(data)) {
+          if (validObject(data)) {
             if (typeof data === "string") data = JSON.parse(data);
             if (typeof data.Links === "string") data.Links = JSON.parse(data.Links);
             resolve(data);
@@ -582,9 +580,9 @@ var coreApp = function (options) {
       var now = teeGetTrustedTime();
       if (now < roundTime + ROUND_TIME) callback("teeProofOfLuckMine error: time", null);
       else {
-        roundBlock = null;
-        roundBlockParent = null;
-        roundTime = null;
+        // roundBlock = null;
+        // roundBlockParent = null;
+        // roundTime = null;
         l = teeGetRandom();
         var fl = (l / Number.MAX_VALUE) * ROUND_TIME;
         console.log("teeSleep: " + fl + " seconds");
@@ -640,7 +638,6 @@ var coreApp = function (options) {
     logger("luck");
     var totalLuck = 0;
     for (var i = 0; i < thisChain.length; i++) {
-      console.log('i ' + totalLuck);
       var report = teeReportData(thisChain[i].attestation);
       if (thisChain[i].payload !== "GENESIS" && report.luck >= 1) totalLuck += report.luck;
       if (i === thisChain.length - 1) return totalLuck;
@@ -699,9 +696,6 @@ var coreApp = function (options) {
           seenBlockHashes.push(newBlockHash);
 
           /* Check if newChain is valid and luckier than our current chain */
-          console.log(validChain(newChain));
-          console.log(luck(newChain));
-          console.log(luck(chain));
           if (validChain(newChain) && luck(newChain) > luck(chain)) {
             logger("pubSub: found luckier block");
 
@@ -771,7 +765,7 @@ var coreApp = function (options) {
   var roundInterval = new cron("*/" + ROUND_TIME + " * * * * *", function() {
     if (CRON_ON) {
       printInterval();
-      if (peers.length === 0) ipfsPeerID().then(ipfsPeerDiscovery);
+      if (pubSub.getPeerSet().length === 0) ipfsPeerID().then(ipfsPeerDiscovery);
 
       if (!roundUpdate) resetCallback();
       roundUpdate = false;
@@ -806,7 +800,7 @@ var coreApp = function (options) {
   });
 
   app.get("/peers", function (req, res, next) {
-    res.status(200).json({ peers: peers });
+    res.status(200).json({ peers: pubSub.getPeerSet() });
   });
 
   app.get("/", function (req, res, next) {

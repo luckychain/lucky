@@ -22,7 +22,7 @@ module.exports = function(ipfs, logger, IPFS_ID, DIRECTORY, ID_DIRECTORY) {
       oboe("http://127.0.0.1:5001/api/v0/dht/findprovs\?arg\=" + hash).done((res) => {
         if (res.Type === 4) {
           var id = res.Responses[0].ID;
-          if (id !== IPFS_ID && !_.contains(peers, id)) {
+          if (id !== IPFS_ID) {
             ipfsPubSub(id);
             logger("ipfsPeerDiscovery: " + id);
           }
