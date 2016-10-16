@@ -132,7 +132,7 @@ var coreApp = function (options) {
     ipfs.id().then((id) => {
       /* IPFS daemon id */
       IPFS_ID = id.ID;
-      Peer = require('./peers')(ipfs, logger, IPFS_ID, DIRECTORY, ID_DIRECTORY);
+      Peer = require('./peers')(ipfs, logger, validObject, IPFS_ID, DIRECTORY, ID_DIRECTORY);
       console.log("IPFS_ID: " + IPFS_ID);
 
       /* Load Pubsub */
@@ -159,12 +159,12 @@ var coreApp = function (options) {
           })
           ipfsPeerPublish().then((path) => {
             console.log("Successful initialization, starting...");
-            logger(blockHash);
-            logger(JSON.stringify(block, null, " "));
-            logger(JSON.stringify(transactions, null, " "));
-            logger(JSON.stringify(chain, null, " "));
+            // logger(blockHash);
+            // logger(JSON.stringify(block, null, " "));
+            // logger(JSON.stringify(transactions, null, " "));
+            // logger(JSON.stringify(chain, null, " "));
 
-            CRON_ON = true;
+            // CRON_ON = true;
           });
           pubSub = new PSG(p2pnode);
           pubSub.subscribe('block');
@@ -585,10 +585,10 @@ var coreApp = function (options) {
         // roundTime = null;
         l = teeGetRandom();
         var fl = (l / Number.MAX_VALUE) * ROUND_TIME;
-        console.log("teeSleep: " + fl + " seconds");
+        logger("teeSleep: " + fl + " seconds");
 
         setTimeout(function() {
-          console.log("returned from teeSleep");
+          logger("returned from teeSleep");
           var newCounter = teeReadMonotonicCounter();
           var nonce = headerParentHash;
           if (counter !== newCounter) callback("teeProofOfLuckMine error: counter", null);

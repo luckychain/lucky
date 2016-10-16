@@ -1,4 +1,6 @@
-module.exports = function(ipfs, logger, IPFS_ID, DIRECTORY, ID_DIRECTORY) { 
+var oboe = require('oboe');
+
+module.exports = function(ipfs, logger, validObject, IPFS_ID, DIRECTORY, ID_DIRECTORY) { 
 
   /* Returns the hash identifier for this blockchain application */
   this.ipfsPeerID = function() {
@@ -36,6 +38,7 @@ module.exports = function(ipfs, logger, IPFS_ID, DIRECTORY, ID_DIRECTORY) {
   this.ipfsPubSub = function(peerID) {
     logger("ipfsPubSub");
     ipfsPeerResolve(peerID).then((path) => { return ipfsGetData(path, "/pubsub"); }).then((p2pID) => {
+      console.log("Dialing " + p2pID.id);
       var id = PeerId.createFromJSON(p2pID);
       var peer = new PeerInfo(id);
       peer.multiaddr.add(multiaddr('/ip4/0.0.0.0/tcp/10333'));
