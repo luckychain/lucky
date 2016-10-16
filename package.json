@@ -20,13 +20,17 @@
     "express": "~4.12.2",
     "foreman": "^1.4.1",
     "ipfs-api": "^4.0.2",
+    "libp2p-ipfs": "^0.14.1",
     "mime-db": "^1.23.0",
     "oboe": "^2.1.2",
+    "peer-id": "^0.7.0",
+    "peer-info": "^0.7.1",
     "react": "^0.13.3",
     "react-bootstrap": "^0.23.0",
     "react-tools": "^0.13.3",
     "reactify": "^1.1.1",
     "request": "^2.72.0",
+    "run-series": "^1.1.4",
     "underscore": "^1.8.3"
   },
   "engines": {

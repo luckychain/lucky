@@ -39,4 +39,5 @@ public/javascripts/bundle.js
 public/stylesheets/bundle.css
 storage/block
 storage/transactions
+storage/pubsub
 .bash_profile
