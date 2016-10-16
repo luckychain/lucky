@@ -19,8 +19,12 @@
     "ejs": "^2.3.4",
     "express": "~4.12.2",
     "foreman": "^1.4.1",
+    "git-sha1": "^0.1.2",
     "ipfs-api": "^4.0.2",
     "libp2p-ipfs": "^0.14.1",
+    "lodash.intersection": "^4.4.0",
+    "lodash.uniq": "^4.5.0",
+    "lodash.values": "^4.3.0",
     "mime-db": "^1.23.0",
     "oboe": "^2.1.2",
     "peer-id": "^0.7.0",
@@ -31,6 +35,7 @@
     "reactify": "^1.1.1",
     "request": "^2.72.0",
     "run-series": "^1.1.4",
+    "time-cache": "^0.2.3",
     "underscore": "^1.8.3"
   },
   "engines": {
