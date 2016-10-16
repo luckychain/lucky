@@ -164,7 +164,7 @@ var coreApp = function (options) {
             // logger(JSON.stringify(transactions, null, " "));
             // logger(JSON.stringify(chain, null, " "));
 
-            // CRON_ON = true;
+            CRON_ON = true;
           });
           pubSub = new PSG(p2pnode);
           pubSub.subscribe('block');
