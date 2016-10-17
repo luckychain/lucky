@@ -179,7 +179,10 @@ var coreApp = function (options) {
           //   pubSub.publish('interop', new Buffer('hey im ' + IPFS_ID))
           // }, 300)
           pubSub.on('block', (newBlockHash) => {
-            pubSubBlock(newBlockHash);
+            if (newBlockHash.toString() !== blockHash) {
+              console.log("@@@@@@@@@@@@@@@@@ RECEIVED NEW BLOCK FROM PEER " + newBlockHash.toString() + " @@@@@@@@@@@@@@@@@@@@@")
+              pubSubBlock(newBlockHash);
+            }
           });
           pubSub.on('transaction', (link) => {
             pubSubTransaction(link);
@@ -811,9 +814,6 @@ var coreApp = function (options) {
 
             ipfsWriteBlock(newBlock).then((newBlockHash) => {
               console.log("PubSub: Luckier block accepted, writing block...");
-              
-              /* Publish it to peers */
-              pubSub.publish('block', new Buffer(newBlockHash));
 
               localWriteBlockHash(newBlockHash).then(() => {
                 /* Update uncommitted transactions for new chain */
@@ -830,6 +830,9 @@ var coreApp = function (options) {
                     block = newBlock;
                     blockHash = newBlockHash;
                     roundUpdate = true;
+
+                    /* Publish it to peers */
+                    pubSub.publish('block', new Buffer(newBlockHash));
 
                     /* Start a new round of mining */
                     if (roundBlock === null || roundBlock === undefined) newRound(newBlock, newChain);
