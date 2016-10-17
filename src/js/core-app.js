@@ -316,6 +316,17 @@ var coreApp = function (options) {
     });
   };
 
+  /* Returns the resolved path given a peer id - called every pubsub interval */
+  function ipfsPeerResolve(id) {
+    logger("ipfsPeerResolve");
+    return new Promise((resolve) => {
+      ipfs.name.resolve(id, null, (err, nameRes) => {
+        if (err) logger("ipfsPeerResolve error: " + id, err);
+        else resolve(nameRes.Path);
+      });
+    });
+  };
+
   function ipfsPubSub(peerID) {
     logger("ipfsPubSub");
     ipfsPeerResolve(peerID).then((path) => { return ipfsGetData(path, "/pubsub.json"); }).then((p2pID) => {
@@ -346,19 +357,6 @@ var coreApp = function (options) {
             }
           });
         }
-      });
-    });
-  };
-
-  /* Returns the resolved path given a peer id - called every pubsub interval */
-  function ipfsPeerResolve(id) {
-    logger("ipfsPeerResolve");
-    return new Promise((resolve) => {
-      ipfs.name.resolve(id, null, (err, nameRes) => {
-        if (err) {
-          peers = _.without(peers, id);
-          logger("ipfsPeerResolve error: ipfs.name.resolve failed for " + id, err);
-        } else resolve(nameRes.Path);
       });
     });
   };
@@ -748,7 +746,6 @@ var coreApp = function (options) {
 
   /* Computing the luck of a valid blockchain. */
   function luck(thisChain) {
-    logger("luck");
     var totalLuck = 0;
     for (var i = 0; i < thisChain.length; i++) {
       var report = teeReportData(thisChain[i].attestation);
@@ -761,8 +758,6 @@ var coreApp = function (options) {
 
   /* Returns true if the newChain is in accordance to the structure of our specified chain */
   function validChain(newChain) {
-    logger("validChain");
-
     if (!validObject(newChain)) return false;
     else {
       if (typeof newChain === "string") newChain = JSON.parse(newChain);
@@ -867,8 +862,6 @@ var coreApp = function (options) {
 
   /* Construct a new commit to update block head */
   function resetCallback() {
-    logger("resetCallback");
-
     var newTransactionLinks = transactions.Links.slice();
     commit(newTransactionLinks).then((newBlockHash) => {
       pubSubBlock(new Buffer(newBlockHash));
@@ -913,7 +906,7 @@ var coreApp = function (options) {
   });
 
   app.get("/peers", function (req, res, next) {
-    res.status(200).json({ peers: pubSub.getPeerSet() });
+    res.status(200).json({ peers: Object.keys(pubSub.getPeerSet()) });
   });
 
   app.get("/", function (req, res, next) {
