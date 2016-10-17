@@ -13,7 +13,9 @@ let node
 let ps
 
 function bootNode(next) {
-  const id = PeerId.createFromJSON(require('./subscriber-id'))
+  // const id = PeerId.createFromJSON(require('./subscriber-id'))
+  const id = PeerId.create({ bits: 2048 })
+  console.log(id.toJSON());
   const peer = new PeerInfo(id)
   peer.multiaddr.add(multiaddr('/ip4/0.0.0.0/tcp/12367'))
   node = new libp2pIPFS.Node(peer)
@@ -45,7 +47,8 @@ function listen () {
 
   ps.subscribe('interop')
 
-  const idPublisher = PeerId.createFromJSON(require('./publisher-id'))
+  // const idPublisher = PeerId.createFromJSON(require('./publisher-id'))
+  const idPublisher = PeerId.createFromJSON(require('../../../../storage/pubsub'))
   const peerPublisher = new PeerInfo(idPublisher)
   peerPublisher.multiaddr.add(multiaddr('/ip4/0.0.0.0/tcp/10333'))
   

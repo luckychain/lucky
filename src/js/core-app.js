@@ -96,7 +96,7 @@ var coreApp = function (options) {
   /* Storage */
   var DIRECTORY = "storage";
   var ID_DIRECTORY = DIRECTORY + "/id";
-  var PUBSUB_DIRECTORY = DIRECTORY + "/pubsub";
+  var PUBSUB_DIRECTORY = DIRECTORY + "/pubsub.json";
   var BLOCK_DIRECTORY = DIRECTORY + "/block";
   var TRANSACTIONS_DIRECTORY = DIRECTORY + "/transactions";
 
@@ -139,7 +139,7 @@ var coreApp = function (options) {
         console.log("Initializing local PubSub state...");
         var pubSubID;
         if (err || !validObject(res.toString())) {
-          pubSubID = PeerId.create({ bits: 32 }).toJSON();
+          pubSubID = PeerId.create({ bits: 2048 }).toJSON();
           var peerString = JSON.stringify(pubSubID, null, 2);
           fs.writeFile(PUBSUB_DIRECTORY, peerString, null);
         } else {
@@ -168,6 +168,10 @@ var coreApp = function (options) {
           pubSub = new PSG(p2pnode);
           pubSub.subscribe('block');
           pubSub.subscribe('transaction');
+          // setInterval(() => {
+          //   process.stdout.write('.')
+          //   pubSub.publish('interop', new Buffer('hey im ' + IPFS_ID))
+          // }, 300)
           pubSub.on('block', (newBlockHash) => {
             pubSubBlock(newBlockHash);
           });
@@ -375,7 +379,6 @@ var coreApp = function (options) {
 
   /* Returns the payload given the hash */
   function ipfsGetPayload(hash) {
-    logger("ipfsGetPayload");
     return new Promise((resolve) => {
       ipfs.object.data(hash, { enc: "base58" }, (err, data) => {
         if (err) logger("ipfsGetPayload error: ", err);
@@ -393,7 +396,6 @@ var coreApp = function (options) {
 
   /* Returns the block given the hash */
   function ipfsGetBlock(hash) {
-    logger("ipfsGetBlock");
     return new Promise((resolve) => {
       ipfs.object.data(hash, { enc: "base58" }, (err, data) => {
         if (err) logger("ipfsGetPayload error: ", err);
@@ -410,7 +412,6 @@ var coreApp = function (options) {
 
   /* Returns the transaction given the hash */
   function ipfsGetTransaction(hash) {
-    logger("ipfsGetTransaction");
     return new Promise((resolve) => {
       ipfs.object.data(hash, { enc: "base58" }, (err, data) => {
         if (err) logger("ipfsGetPayload error: ", err);
