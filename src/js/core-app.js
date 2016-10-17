@@ -309,7 +309,7 @@ var coreApp = function (options) {
 
   function ipfsPubSub(peerID) {
     logger("ipfsPubSub");
-    ipfsPeerResolve(peerID).then((path) => { return ipfsGetData(path, "/pubsub"); }).then((p2pID) => {
+    ipfsPeerResolve(peerID).then((path) => { return ipfsGetData(path, "/pubsub.json"); }).then((p2pID) => {
       console.log("Dialing " + p2pID.id);
       var id = PeerId.createFromJSON(p2pID);
       var peer = new PeerInfo(id);
