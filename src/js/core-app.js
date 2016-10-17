@@ -137,25 +137,31 @@ var coreApp = function (options) {
       /* Load Pubsub */
       fs.readFile(PUBSUB_DIRECTORY, function (err, res) {
         console.log("Initializing local PubSub state...");
-        var pubSubID;
+        var ps;
         if (err || !validObject(res.toString())) {
-          pubSubID = PeerId.create({ bits: 2048 }).toJSON();
-          var peerString = JSON.stringify(pubSubID, null, 2);
-          fs.writeFile(PUBSUB_DIRECTORY, peerString, null);
+          ps = PeerId.create({ bits: 2048 }).toJSON();
+          var id = PeerId.createFromJSON(ps);
+          fs.writeFile(PUBSUB_DIRECTORY, JSON.stringify(ps, null, 2), null);
         } else {
-          pubSubID = JSON.parse(res.toString());
+          ps = JSON.parse(res.toString());
+          var id = PeerId.createFromJSON({ id: ps.id, privKey: ps.privKey, pubKey: ps.pubKey });
         }
 
-        var id = PeerId.createFromJSON(pubSubID);
         var peer = new PeerInfo(id);
         peer.multiaddr.add(multiaddr('/ip4/0.0.0.0/tcp/10333'));
+
         p2pnode = new libp2pIPFS.Node(peer);
         p2pnode.start((err) => {
           if (err) throw err;
           console.log('Publisher listening on:');
+          
+          ps.addrs = [];
           peer.multiaddrs.forEach((ma) => {
             console.log(ma.toString() + '/ipfs/' + id.toB58String());
+            ps.addrs.push(ma.toString());
           })
+          fs.writeFile(PUBSUB_DIRECTORY, JSON.stringify(ps, null, 2), null);
+
           ipfsPeerPublish().then((path) => {
             console.log("Successful initialization, starting...");
             // logger(blockHash);
@@ -311,10 +317,12 @@ var coreApp = function (options) {
     logger("ipfsPubSub");
     ipfsPeerResolve(peerID).then((path) => { return ipfsGetData(path, "/pubsub.json"); }).then((p2pID) => {
       console.log("Dialing " + p2pID.id);
-      var id = PeerId.createFromJSON(p2pID);
+      var id = PeerId.createFromJSON({ id: p2pID.id, privKey: p2pID.privKey, pubKey: p2pID.pubKey });
       var peer = new PeerInfo(id);
-      peer.multiaddr.add(multiaddr('/ip4/0.0.0.0/tcp/10333'));
-      pubSub.connect(peerPublisher);
+      p2pID.addrs.forEach((addr) => {
+        peer.multiaddr.add(multiaddr(addr));
+      })
+      pubSub.connect(peer);
     });
   };
 
