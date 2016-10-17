@@ -158,7 +158,7 @@ var coreApp = function (options) {
           ps.addrs = [];
           peer.multiaddrs.forEach((ma) => {
             console.log(ma.toString() + '/ipfs/' + id.toB58String());
-            ps.addrs.push(ma.toString());
+            ps.addrs.push(ma.toString() + '/ipfs/' + id.toB58String());
           })
           fs.writeFile(PUBSUB_DIRECTORY, JSON.stringify(ps, null, 2), null);
 
@@ -175,7 +175,10 @@ var coreApp = function (options) {
           pubSub.subscribe('block');
           pubSub.subscribe('transaction');
           // setInterval(() => {
-          //   process.stdout.write('.')
+          //   // process.stdout.write('.')
+          //   pubSub.subscribe('block');
+          //   pubSub.subscribe('transaction');
+          //   pubSub.subscribe('interop');
           //   pubSub.publish('interop', new Buffer('hey im ' + IPFS_ID))
           // }, 300)
           pubSub.on('block', (newBlockHash) => {

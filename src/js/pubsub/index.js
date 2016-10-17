@@ -71,6 +71,7 @@ function PubSubGossip (libp2pNode, dagService) {
                     .map((idB58Str) => peerSet[idB58Str])
 
     peers.forEach((peer) => {
+      console.log(JSON.stringify(topics) + " | " + peer.peerInfo.id.toB58String() + " " + JSON.stringify(peer.topics))
       if (_intersection(peer.topics, topics).length > 0) {
         const msgs = messages.map((message) => {
           const msg = {
