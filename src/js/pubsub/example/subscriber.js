@@ -53,6 +53,11 @@ function listen () {
   peerPublisher.multiaddr.add(multiaddr('/ip4/0.0.0.0/tcp/10333'))
   
   ps.connect(peerPublisher)
+
+  
+  setInterval(() => {
+    console.log(Object.keys(ps.getPeerSet()))
+  }, 300)
 }
 
 series([

@@ -154,7 +154,7 @@ var coreApp = function (options) {
         p2pnode.start((err) => {
           if (err) throw err;
           console.log('Publisher listening on:');
-          
+
           ps.addrs = [];
           peer.multiaddrs.forEach((ma) => {
             console.log(ma.toString() + '/ipfs/' + id.toB58String());
@@ -240,7 +240,7 @@ var coreApp = function (options) {
   function printInterval() {
     console.log("[----- ROUND TIME: " + ROUND_TIME + " SECONDS -----]");
     console.log("Current list of peers: ");
-    console.log(JSON.stringify(pubSub.getPeerSet(), null, " "));
+    console.log(Object.keys(pubSub.getPeerSet()));
   }
 
   /* Prints debug relevant messages */
@@ -726,8 +726,7 @@ var coreApp = function (options) {
               Data : { luck: proof.luck, attestation: proof },
               Links: [{ name: "payload", hash: hash }]
             }).then((newBlockHash) => {
-              console.log("Commit accepted");
-              console.log(newBlockHash);
+              console.log("New Commit: " + newBlockHash);
 
               transactions.Links = [];
               localWriteTransactions();
@@ -876,7 +875,7 @@ var coreApp = function (options) {
   var roundInterval = new cron("*/" + ROUND_TIME + " * * * * *", function() {
     if (CRON_ON) {
       printInterval();
-      if (pubSub.getPeerSet().length === 0) ipfsPeerID().then(ipfsPeerDiscovery);
+      if (Object.keys(pubSub.getPeerSet()).length === 0) ipfsPeerID().then(ipfsPeerDiscovery);
 
       if (!roundUpdate) resetCallback();
       roundUpdate = false;
