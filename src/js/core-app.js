@@ -439,8 +439,11 @@ var coreApp = function (options) {
             if (chunks.length > 0) {
               var data = chunks.join("");
               if (validObject(data)) {
-                if (typeof data === "string") data = JSON.parse(data);
-                resolve(data);
+                if (link === "/pubgrok") resolve(data);
+                else {
+                  if (typeof data === "string") data = JSON.parse(data);
+                  resolve(data);
+                }
               }
             }
           })

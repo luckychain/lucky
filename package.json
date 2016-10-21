@@ -26,6 +26,7 @@
     "lodash.uniq": "^4.5.0",
     "lodash.values": "^4.3.0",
     "mime-db": "^1.23.0",
+    "ngrok": "^2.2.3",
     "oboe": "^2.1.2",
     "peer-id": "^0.7.0",
     "peer-info": "^0.7.1",
