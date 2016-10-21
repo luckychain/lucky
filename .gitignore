@@ -40,4 +40,5 @@ public/stylesheets/bundle.css
 storage/block
 storage/transactions
 storage/pubsub.json
+storage/pubgrok
 .bash_profile

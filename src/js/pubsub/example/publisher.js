@@ -15,7 +15,7 @@ let ps
 function bootNode(next) {
   const id = PeerId.createFromJSON(require('./publisher-id'))
   const peer = new PeerInfo(id)
-  peer.multiaddr.add(multiaddr('/ip4/0.0.0.0/tcp/10333'))
+  peer.multiaddr.add(multiaddr('/ip4/0.0.0.0/tcp/80'))
   node = new libp2pIPFS.Node(peer)
   node.start((err) => {
     if (err) {

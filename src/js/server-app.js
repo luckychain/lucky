@@ -4,7 +4,6 @@
 var bodyParser = require('body-parser');
 var cors = require('cors');
 var express = require('express');
-var http = require('http');
 var path = require('path');
 
 var app = express();
@@ -14,7 +13,6 @@ var core = require('./core-app.js');
 
 var port = (process.env.PORT || '3000');
 app.set('port', port);
-http.createServer(app).listen(port);
 app.use(cors());
 
 /**************************** SETUP DIRECTORIES ******************************/

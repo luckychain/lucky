@@ -5,9 +5,11 @@ var equal = require("deep-equal");
 var fs = require("fs");
 var libp2pIPFS = require('libp2p-ipfs');
 var multiaddr = require('multiaddr');
+var ngrok = require('ngrok');
 var oboe = require("oboe");
 var PeerId = require('peer-id')
 var PeerInfo = require('peer-info');
+var request = require('request');
 var series = require('run-series');
 var _ = require("underscore");
 
@@ -92,11 +94,13 @@ var coreApp = function (options) {
   /* Client Parameters */
   var ROUND_TIME = 10; /* Time in seconds */
   var PUBSUB_NUM_PEERS = 5; /* PubSub number of peers to connect to */
+  var CLIENT_PORT = 8000;
 
   /* Storage */
   var DIRECTORY = "storage";
   var ID_DIRECTORY = DIRECTORY + "/id";
   var PUBSUB_DIRECTORY = DIRECTORY + "/pubsub.json";
+  var PUBGROK_DIRECTORY = DIRECTORY + "/pubgrok";
   var BLOCK_DIRECTORY = DIRECTORY + "/block";
   var TRANSACTIONS_DIRECTORY = DIRECTORY + "/transactions";
 
@@ -109,7 +113,10 @@ var coreApp = function (options) {
   var chain = [];
 
   /* PubSub */
+  var PUBSUB_LOCAL = false;
   var seenBlockHashes = [];
+  var pubGrokAddresses = []; /* Peers */
+  var pubGrokAddress = ""; /* Mine */
   var pubSubID = {};
   var IPFS_ID = "";
   var p2pnode;
@@ -134,110 +141,140 @@ var coreApp = function (options) {
       IPFS_ID = id.ID;
       console.log("IPFS_ID: " + IPFS_ID);
 
-      /* Load Pubsub */
-      fs.readFile(PUBSUB_DIRECTORY, function (err, res) {
-        console.log("Initializing local PubSub state...");
-        var ps;
-        if (err || !validObject(res.toString())) {
-          ps = PeerId.create({ bits: 2048 }).toJSON();
-          var id = PeerId.createFromJSON(ps);
-          fs.writeFile(PUBSUB_DIRECTORY, JSON.stringify(ps, null, 2), null);
-        } else {
-          ps = JSON.parse(res.toString());
-          var id = PeerId.createFromJSON({ id: ps.id, privKey: ps.privKey, pubKey: ps.pubKey });
-        }
+      initializePubSub().then(() => {
+        /* Discover IPFS peers */
+        ipfsPeerID().then(ipfsPeerDiscovery);
 
-        var peer = new PeerInfo(id);
-        peer.multiaddr.add(multiaddr('/ip4/0.0.0.0/tcp/10333'));
+        /* Load local uncommitted transactions state */
+        fs.readFile(TRANSACTIONS_DIRECTORY, function (err, res) {
+          console.log("Initializing local transactions state...");
+          if (err || !validObject(res.toString())) {
+            transactions = { Data: "", Links: [] };
+            var transactionsString = JSON.stringify(transactions, null, 2);
+            fs.writeFile(TRANSACTIONS_DIRECTORY, transactionsString, null);
+          } else {
+            transactions = JSON.parse(res.toString());
+          }
 
-        p2pnode = new libp2pIPFS.Node(peer);
-        p2pnode.start((err) => {
-          if (err) throw err;
-          console.log('Publisher listening on:');
-
-          ps.addrs = [];
-          peer.multiaddrs.forEach((ma) => {
-            console.log(ma.toString() + '/ipfs/' + id.toB58String());
-            ps.addrs.push(ma.toString() + '/ipfs/' + id.toB58String());
-          })
-          fs.writeFile(PUBSUB_DIRECTORY, JSON.stringify(ps, null, 2), null);
-
-          ipfsPeerPublish().then((path) => {
-            console.log("Successful initialization, starting...");
-            // logger(blockHash);
-            // logger(JSON.stringify(block, null, " "));
-            // logger(JSON.stringify(transactions, null, " "));
-            // logger(JSON.stringify(chain, null, " "));
-
-            CRON_ON = true;
-          });
-          pubSub = new PSG(p2pnode);
-          pubSub.subscribe('block');
-          pubSub.subscribe('transaction');
-          // setInterval(() => {
-          //   // process.stdout.write('.')
-          //   pubSub.subscribe('block');
-          //   pubSub.subscribe('transaction');
-          //   pubSub.subscribe('interop');
-          //   pubSub.publish('interop', new Buffer('hey im ' + IPFS_ID))
-          // }, 300)
-          pubSub.on('block', (newBlockHash) => {
-            if (newBlockHash.toString() !== blockHash) {
-              console.log("@@@@@@@@@@@@@@@@@ RECEIVED NEW BLOCK FROM PEER " + newBlockHash.toString() + " @@@@@@@@@@@@@@@@@@@@@")
-              pubSubBlock(newBlockHash);
-            }
-          });
-          pubSub.on('transaction', (link) => {
-            pubSubTransaction(link);
-          });
-
-          /* Discover IPFS peers */
-          ipfsPeerID().then(ipfsPeerDiscovery);
-
-          /* Load local uncommitted transactions state */
-          fs.readFile(TRANSACTIONS_DIRECTORY, function (err, res) {
-            console.log("Initializing local transactions state...");
+          /* Load local block (chain head) state */
+          fs.readFile(BLOCK_DIRECTORY, function (err, res) {
+            console.log("Initializing local block state...");
             if (err || !validObject(res.toString())) {
-              transactions = { Data: "", Links: [] };
-              var transactionsString = JSON.stringify(transactions, null, 2);
-              fs.writeFile(TRANSACTIONS_DIRECTORY, transactionsString, null);
+              var data = JSON.stringify({ luck: -1, attestation: "GENESIS" });
+              var newBlock = { Data: data, Links: [{ name: "payload", hash: "GENESIS" }] };
+              ipfsWriteBlock(newBlock).then((newBlockHash) => {
+                fs.writeFile(BLOCK_DIRECTORY, newBlockHash, null);
+                block = newBlock;
+                blockHash = newBlockHash;
+                chain = [ { luck: -1,
+                            attestation: 'GENESIS',
+                            hash: blockHash,
+                            payload: 'GENESIS',
+                            parent: 'GENESIS',
+                            transactions: [] } ];
+              });
             } else {
-              transactions = JSON.parse(res.toString());
+              blockHash = res.toString();
+              ipfsGetBlock(blockHash).then((newBlock) => {
+                block = parseIPFSObject(newBlock);
+                ipfsConstructChain(blockHash).then((newChain) => {
+                  chain = newChain;
+                });
+              });
             }
-
-            /* Load local block (chain head) state */
-            fs.readFile(BLOCK_DIRECTORY, function (err, res) {
-              console.log("Initializing local block state...");
-              if (err || !validObject(res.toString())) {
-                var data = JSON.stringify({ luck: -1, attestation: "GENESIS" });
-                var newBlock = { Data: data, Links: [{ name: "payload", hash: "GENESIS" }] };
-                ipfsWriteBlock(newBlock).then((newBlockHash) => {
-                  fs.writeFile(BLOCK_DIRECTORY, newBlockHash, null);
-                  block = newBlock;
-                  blockHash = newBlockHash;
-                  chain = [ { luck: -1,
-                              attestation: 'GENESIS',
-                              hash: blockHash,
-                              payload: 'GENESIS',
-                              parent: 'GENESIS',
-                              transactions: [] } ];
-                });
-              } else {
-                blockHash = res.toString();
-                ipfsGetBlock(blockHash).then((newBlock) => {
-                  block = parseIPFSObject(newBlock);
-                  ipfsConstructChain(blockHash).then((newChain) => {
-                    chain = newChain;
-                  });
-                });
-              }
-            });
           });
-        })
-      });
+        });
+      })
     }).catch((err) => {
       console.log("initializeLocalState error: check that ipfs daemon is running");
       console.log(err);
+    });
+  }
+
+  function initializePubSub() {
+    logger("initializePubSub");
+    return new Promise((resolve) => {
+      if (PUBSUB_LOCAL) {
+        /* Load Pubsub */
+        fs.readFile(PUBSUB_DIRECTORY, function (err, res) {
+          console.log("Initializing local PubSub state...");
+        
+          var ps;
+          if (err || !validObject(res.toString())) {
+            ps = PeerId.create({ bits: 2048 }).toJSON();
+            var id = PeerId.createFromJSON(ps);
+            fs.writeFile(PUBSUB_DIRECTORY, JSON.stringify(ps, null, 2), null);
+          }
+          else {
+            ps = JSON.parse(res.toString());
+            var id = PeerId.createFromJSON({ id: ps.id, privKey: ps.privKey, pubKey: ps.pubKey });
+          }
+
+          var peer = new PeerInfo(id);
+          peer.multiaddr.add(multiaddr('/ip4/0.0.0.0/tcp/10333'));
+
+          p2pnode = new libp2pIPFS.Node(peer);
+          p2pnode.start((err) => {
+            if (err) throw err;
+
+            ps.addrs = [];
+            console.log('Publisher listening on:');
+            peer.multiaddrs.forEach((ma) => {
+              console.log(ma.toString() + '/ipfs/' + id.toB58String());
+              ps.addrs.push(ma.toString() + '/ipfs/' + id.toB58String());
+            })
+
+            fs.writeFile(PUBSUB_DIRECTORY, JSON.stringify(ps, null, 2), null);
+
+            ipfsPeerPublish().then((path) => {
+              console.log("Successful initialization, starting...");
+              CRON_ON = true;
+            });
+
+            pubSub = new PSG(p2pnode);
+            pubSub.subscribe('block');
+            pubSub.subscribe('transaction');
+            // setInterval(() => {
+            //   // process.stdout.write('.')
+            //   // pubSub.subscribe('block');
+            //   // pubSub.subscribe('transaction');
+            //   // pubSub.subscribe('interop');
+            //   pubSub.publish('interop', new Buffer('hey im ' + IPFS_ID))
+            // }, 300)
+            pubSub.on('block', (newBlockHash) => {
+              if (newBlockHash.toString() !== blockHash) {
+                console.log("@@@@@@@@@@@@@@@@@ RECEIVED NEW BLOCK FROM PEER " + newBlockHash.toString() + " @@@@@@@@@@@@@@@@@@@@@")
+                pubSubBlock(newBlockHash);
+              }
+            });
+            pubSub.on('transaction', (link) => {
+              pubSubTransaction(link);
+            });
+
+            resolve();
+          });
+        });
+      }
+      else {
+        console.log('Publisher listening on:');
+        ngrok.connect(CLIENT_PORT, function (err, address) {
+          if (err) {
+            console.log(err);
+          }
+          else {
+            console.log(address);
+            pubGrokAddress = address;
+            fs.writeFile(PUBGROK_DIRECTORY, address, null);
+
+            ipfsPeerPublish().then((path) => {
+              console.log("Successful initialization, starting...");
+              CRON_ON = true;
+            });
+
+            resolve();
+          }
+        });
+      }
     });
   }
 
@@ -246,7 +283,8 @@ var coreApp = function (options) {
   function printInterval() {
     console.log("[----- ROUND TIME: " + ROUND_TIME + " SECONDS -----]");
     console.log("Current list of peers: ");
-    console.log(Object.keys(pubSub.getPeerSet()));
+    if (PUBSUB_LOCAL) console.log(Object.keys(pubSub.getPeerSet()));
+    else console.log(JSON.stringify(pubGrokAddresses));
   }
 
   /* Prints debug relevant messages */
@@ -286,7 +324,7 @@ var coreApp = function (options) {
 
 /********************************** PEERS ************************************/
 
-/* Returns the hash identifier for this blockchain application */
+  /* Returns the hash identifier for this blockchain application */
   function ipfsPeerID() {
     logger("ipfsPeerID");
     return new Promise((resolve) => {
@@ -309,7 +347,11 @@ var coreApp = function (options) {
         if (res.Type === 4) {
           var id = res.Responses[0].ID;
           if (id !== IPFS_ID) {
-            ipfsPubSub(id);
+            if (PUBSUB_LOCAL) {
+              ipfsPubSub(id);
+            } else {
+              ipfsPubGrok(id);
+            }
             logger("ipfsPeerDiscovery: " + id);
           }
         }
@@ -340,6 +382,26 @@ var coreApp = function (options) {
         peer.multiaddr.add(multiaddr(addr));
       })
       pubSub.connect(peer);
+    });
+  };
+
+  function ipfsPubGrok(peerID) {
+    logger("ipfsPubGrok");
+    ipfsPeerResolve(peerID).then((path) => { return ipfsGetData(path, "/pubgrok"); }).then((peerAddress) => {
+      console.log("Dialing " + peerAddress);
+
+      var that = this;
+      request({
+        url: peerAddress + '/dial',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: pubGrokAddress })
+      }, function(error, response, body) {
+        if (response.statusCode === 200) {
+          console.log("Connected to " + peerAddress);
+          pubGrokAddresses.push(peerAddress);
+        }
+      });
     });
   };
 
@@ -830,7 +892,22 @@ var coreApp = function (options) {
                     roundUpdate = true;
 
                     /* Publish it to peers */
-                    pubSub.publish('block', new Buffer(newBlockHash));
+                    if (PUBSUB_LOCAL) {
+                      pubSub.publish('block', new Buffer(newBlockHash));
+                    } else {
+                      pubGrokAddresses.forEach((peer) => {
+                        request({
+                          url: peer + '/block', 
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ blockHash: newBlockHash })
+                        }, function(error, response, body) {
+                          if (response.statusCode === 200) {
+                            logget("Published block to " + peer);
+                          }
+                        });
+                      });
+                    }
 
                     /* Start a new round of mining */
                     if (roundBlock === null || roundBlock === undefined) newRound(newBlock, newChain);
@@ -853,7 +930,22 @@ var coreApp = function (options) {
       ipfsGetTransaction(txLink.hash).then((txPayload) => {
         if (validTransactionPayload(txPayload)) {
           /* Publish it to peers */
-          pubSub.publish('transaction', new Buffer(link));
+          if (PUBSUB_LOCAL) {
+            pubSub.publish('transaction', new Buffer(link));
+          } else {
+            pubGrokAddresses.forEach((peer) => {
+              request({
+                url: peer + '/tx', 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tx: link })
+              }, function(error, response, body) {
+                if (response.statusCode === 200) {
+                  logget("Published transaction to " + peer);
+                }
+              });
+            });
+          }
           /* Write it to local state */
           localWriteTransactionLink(txLink).then(() => {
             console.log("pubSub: added transaction link");
@@ -874,7 +966,10 @@ var coreApp = function (options) {
   var roundInterval = new cron("*/" + ROUND_TIME + " * * * * *", function() {
     if (CRON_ON) {
       printInterval();
-      if (Object.keys(pubSub.getPeerSet()).length === 0) ipfsPeerID().then(ipfsPeerDiscovery);
+      if (PUBSUB_LOCAL) {
+        if (Object.keys(pubSub.getPeerSet()).length === 0) ipfsPeerID().then(ipfsPeerDiscovery);
+      }
+      else if (pubGrokAddresses.length) ipfsPeerID().then(ipfsPeerDiscovery);
 
       if (!roundUpdate) resetCallback();
       roundUpdate = false;
@@ -886,21 +981,62 @@ var coreApp = function (options) {
   var app = options.app;
 
   app.post("/tx", function(req, res, next) {
-    var tx = req.body.tx;
-    if (validTransactionPayload(tx)) {
-      console.log("/tx request received");
-      ipfsWritePayload(tx).then((hash) => {
-        logger('/tx payload hash: ' + hash);
-        var txLink = { name: "transaction", hash: hash };
-        if (!validTransactionLink(txLink)) res.status(400).json({ error: "invalid" });
-        else {
-          pubSub.publish('transaction', new Buffer(JSON.stringify(txLink)));
-          localWriteTransactionLink(txLink).then(() => {
-            console.log("/tx request successful");
-            res.status(200).json({ message: "success", datetime: currentTimestamp() });
-          })
-        }
-      })
+    if (req.body !== undefined || req.body !== null) {
+      var tx = req.body.tx;
+      if (validTransactionPayload(tx)) {
+        console.log("/tx request received");
+        ipfsWritePayload(tx).then((hash) => {
+          logger('/tx payload hash: ' + hash);
+          var txLink = { name: "transaction", hash: hash };
+          if (!validTransactionLink(txLink)) res.status(400).json({ error: "invalid" });
+          else {
+            /* Publish it to peers */
+            if (PUBSUB_LOCAL) {
+              pubSub.publish('transaction', new Buffer(JSON.stringify(txLink)));
+            } else {
+              pubGrokAddresses.forEach((peer) => {
+                request({
+                  url: peer + '/tx', 
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ tx: txLink })
+                }, function(error, response, body) {
+                  if (response.statusCode === 200) {
+                    logget("Published transaction to " + peer);
+                  }
+                });
+              });
+            }
+            
+            localWriteTransactionLink(txLink).then(() => {
+              console.log("/tx request successful");
+              res.status(200).json({ message: "success", datetime: currentTimestamp() });
+            })
+          }
+        })
+      }
+    }
+  });
+
+  app.post("/block", function (req, res, next) {
+    console.log("/block request");
+    if (req.body !== undefined || req.body !== null) {
+      var newBlockHash = req.body.blockHash; 
+      if (validObject(address)) {
+        pubSubBlock(newBlockHash);
+        res.status(200);
+      }
+    }
+  });
+
+  app.post("/dial", function (req, res, next) {
+    console.log("/dial request");
+    if (req.body !== undefined || req.body !== null) {
+      var address = req.body.address;
+      if (validObject(address)) {
+        pubGrokAddresses.push(address);
+        res.status(200);
+      }
     }
   });
 
@@ -916,7 +1052,7 @@ var coreApp = function (options) {
     res.render("template");
   });
 
-  var server = app.listen(8000, function() {
+  var server = app.listen(CLIENT_PORT, function() {
     console.log("Listening on port %d", server.address().port);
   });
 
