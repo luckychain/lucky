@@ -1076,7 +1076,11 @@ var blockchain = function (node) {
             logger("pubSub: found luckier block")
 
             ipfsWriteBlock(newBlock).then((newBlockHash) => {
-              console.log("PubSub: Luckier block accepted, writing block...")
+              if (!selfInvocation) {
+                console.log("PubSub: Luckier block accepted from peer, writing block...")
+              } else {
+                console.log("PubSub: Luckier block accepted, writing block...")
+              }
 
               localWriteBlockHash(newBlockHash).then(() => {
                 /* Update uncommitted transactions for new chain */
