@@ -18,7 +18,7 @@ ipfs = new ipfs("localhost", "5001")
 
 var PSG = require('./pubsub')
 
-var coreApp = function (options) {
+var blockchain = function (node) {
 
 /******************************** STRUCTURE **********************************/
   /*
@@ -127,6 +127,11 @@ var coreApp = function (options) {
   var roundBlock = null
   var roundBlockParent = null
   var roundTime = null
+
+  /* Node */
+  var server = node.listen(CLIENT_PORT, function() {
+    console.log("Listening on port %d", server.address().port)
+  })
 
   initializeLocalState()
 
@@ -263,10 +268,10 @@ var coreApp = function (options) {
 
             pubSub.on('block', (newBlockHash) => {
               if (newBlockHash.toString() !== blockHash) {
-                console.log("@@@@@@@@@@@@@@@@@ RECEIVED NEW BLOCK FROM PEER " + newBlockHash.toString() + " @@@@@@@@@@@@@@@@@@@@@")
-                pubSubBlock(newBlockHash)
+                pubSubBlock(newBlockHash, false)
               }
             })
+
             pubSub.on('transaction', (link) => {
               pubSubTransaction(link)
             })
@@ -285,17 +290,18 @@ var coreApp = function (options) {
 
             fs.writeFile(PUBGROK_DIRECTORY, address, null)
 
-            pubSub = new pubngrok(app, address)
+            pubSub = new pubngrok(node, address)
             pubSub.subscribe('block')
             pubSub.subscribe('transaction')
 
             pubSub.on('block', (newBlockHash) => {
               if (newBlockHash !== blockHash) {
                 console.log("@@@@@@@@@@@@@@@@@ RECEIVED NEW BLOCK FROM PEER " + newBlockHash.toString() + " @@@@@@@@@@@@@@@@@@@@@")
-                pubSubBlock(new Buffer(newBlockHash))
+                pubSubBlock(new Buffer(newBlockHash), false)
               }
             })
             pubSub.on('transaction', (link) => {
+              console.log("@@@@@@@@@@@@@@@@@ RECEIVED NEW TRANSACTION FROM PEER " + newBlockHash.toString() + " @@@@@@@@@@@@@@@@@@@@@")
               pubSubTransaction(new Buffer(link))
             })
 
@@ -907,19 +913,19 @@ var coreApp = function (options) {
 
       var newBlockPayload = {
         Data: "",
-        Links: newTransactionLinks.slice()
+        Links: newTransactionLinks.slice().push({
+          name: "parent",
+          hash: blockHash
+        })
       }
-      
-      newBlockPayload.Links.push({
-        name: "parent",
-        hash: blockHash
-      })
 
       ipfsWritePayload(newBlockPayload).then((hash) => {
-
+        logger(hash)
         teeProofOfLuckMine(blockHash, (err, proof) => {
-          if (err) throw err
-          else {
+          if (err) {
+            logger(err)
+          } else {
+            logger("returned from tee pol mine")
             var newBlock = {
               Data : {
                 luck: proof.luck,
@@ -941,8 +947,7 @@ var coreApp = function (options) {
           }
         })
       }).catch((err) => {
-        console.log("Commit failed")
-        console.log(err)
+        logger("Commit failed", err)
       })
     })
   }
@@ -1023,10 +1028,10 @@ var coreApp = function (options) {
  * resetCallback() function to construct a new commit and publish
  * the candidate block to peers.
  */
-  function newRound(newBlock, newChain) {
+  function newRound(newBlock, newChain, selfInvocation) {
     logger("newRound")
     teeProofOfLuckRound(newBlock, newChain)
-    resetCallback()
+    resetCallback(selfInvocation)
   }
 
 /**
@@ -1050,13 +1055,19 @@ var coreApp = function (options) {
  *      and newChain reference, if the roundBlock is not defined or
  *      if the parent hash of the new blockchain does not match the
  *      roundBlock's parent hash.
+ *
+ * Lastly, roundUpdate is set to true if the pubSubBlock()
+ * invocation came from a peer. In this case, as the block head
+ * update was successful, we will not invoke the resetCallback()
+ * method for this interval, as part of the blockchain protocol.
  */
-  function pubSubBlock(newBlockHash) {
+  function pubSubBlock(newBlockHash, selfInvocation) {
     logger("pubSubBlock - " + newBlockHash.toString())
 
     newBlockHash = newBlockHash.toString()
     ipfsGetBlock(newBlockHash).then((newBlock) => {
 
+      /* Skip previously considered block references */
       if (!containsObject(newBlockHash, seenBlockHashes) && !equal(newBlock, block)) {
 
         ipfsConstructChain(newBlockHash).then((newChain) => {
@@ -1082,11 +1093,18 @@ var coreApp = function (options) {
                   if (i === newChain.length - 1) {
                     console.log("PubSub: Block update successful")
 
+                    /* Update local uncomitted transaction state */
                     localWriteTransactions()
+
+                    /* Update local blockchain state with new block */
                     chain = newChain
                     block = newBlock
                     blockHash = newBlockHash
-                    roundUpdate = true
+
+                    /* Set the update for this interval to true */
+                    if (!selfInvocation) {
+                      roundUpdate = true
+                    }
 
                     /* Publish it to peers */
                     if (PUBSUB_LOCAL) {
@@ -1097,9 +1115,9 @@ var coreApp = function (options) {
 
                     /* Start a new round of mining */
                     if (roundBlock === null || roundBlock === undefined) {
-                      newRound(newBlock, newChain)
+                      newRound(newBlock, newChain, selfInvocation)
                     } else if (newChain[0].parent != roundBlockParent) {
-                      newRound(newBlock, newChain)
+                      newRound(newBlock, newChain, selfInvocation)
                     }
                   }
                 }
@@ -1124,15 +1142,20 @@ var coreApp = function (options) {
     logger("pubSub: transaction - " + link.toString())
 
     var txLink = JSON.parse(link.toString())
+
+    /* Verify transaction link structure is valid */
     if (validTransactionLink(txLink)) {
+
       ipfsGetTransaction(txLink.hash).then((txPayload) => {
         if (validTransactionPayload(txPayload)) {
+
           /* Publish it to peers */
           if (PUBSUB_LOCAL) {
             pubSub.publish('transaction', new Buffer(link))
           } else {
             pubSub.publish('transaction', link.toString())
           }
+
           /* Write it to local state */
           localWriteTransactionLink(txLink).then(() => {
             console.log("pubSub: added transaction link")
@@ -1147,10 +1170,10 @@ var coreApp = function (options) {
  * transactions, which can be empty, to construct a new commit (block).
  * The blockhash is then published as a challenger for the new block head.
  */
-  function resetCallback() {
+  function resetCallback(selfInvocation) {
     var newTransactionLinks = transactions.Links.slice()
     commit(newTransactionLinks).then((newBlockHash) => {
-      pubSubBlock(new Buffer(newBlockHash))
+      pubSubBlock(new Buffer(newBlockHash), selfInvocation)
     })
   }
 
@@ -1167,16 +1190,16 @@ var coreApp = function (options) {
       // }
       // else if (pubSub.getPeers().length === 0) ipfsPeerDiscover()
 
-      if (!roundUpdate) resetCallback()
+      if (!roundUpdate) {
+        resetCallback(true)
+      }
       roundUpdate = false
     }
   }, null, true)
   
 /********************************** NETWORK **********************************/
-  
-  var app = options.app
 
-  app.post("/tx", function(req, res, next) {
+  node.post("/tx", function(req, res, next) {
     if (req.body !== undefined || req.body !== null) {
       var tx = req.body.tx
       if (validTransactionPayload(tx)) {
@@ -1214,13 +1237,13 @@ var coreApp = function (options) {
     }
   })
 
-  app.get("/chain", function (req, res, next) {
+  node.get("/chain", function (req, res, next) {
     res.status(200).json({
       chain: chain
     })
   })
 
-  app.get("/peers", function (req, res, next) {
+  node.get("/peers", function (req, res, next) {
     var peerList
     if (PUBSUB_LOCAL) {
       peerList = Object.keys(pubSub.getPeerSet())
@@ -1233,16 +1256,12 @@ var coreApp = function (options) {
     })
   })
 
-  app.get("/", function (req, res, next) {
+  node.get("/", function (req, res, next) {
     res.render("template")
-  })
-
-  var server = app.listen(CLIENT_PORT, function() {
-    console.log("Listening on port %d", server.address().port)
   })
 
 /*****************************************************************************/
 
 }
 
-module.exports = coreApp
+module.exports = blockchain
