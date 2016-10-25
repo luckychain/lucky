@@ -23,7 +23,7 @@
     "mime-db": "^1.23.0",
     "ngrok": "^2.2.3",
     "oboe": "^2.1.2",
-    "pubngrok": "^2.0.4",
+    "pubngrok": "^2.0.5",
     "react": "^0.13.3",
     "react-bootstrap": "^0.23.0",
     "react-tools": "^0.13.3",

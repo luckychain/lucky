@@ -261,11 +261,6 @@ var blockchain = function (node) {
     }
   }
 
-  /* Prints message for internal testing only. */
-  function dlog(message) {
-    console.log(message)
-  }
-
   /* Returns the current timestamp. */
   function currentTimestamp() {
     return (new Date).getTime()
