@@ -289,19 +289,21 @@ var blockchain = function (node) {
             pubSub.subscribe('block')
             pubSub.subscribe('transaction')
 
-            pubSub.on('block', (newBlockHash) => {
-              if (newBlockHash !== blockHash) {
-                console.log("@@@@@@@@@@@@@@@@@ RECEIVED NEW BLOCK FROM PEER " + newBlockHash.toString() + " @@@@@@@@@@@@@@@@@@@@@")
-                pubSubBlock(new Buffer(newBlockHash), false)
-              }
-            })
-            pubSub.on('transaction', (link) => {
-              console.log("@@@@@@@@@@@@@@@@@ RECEIVED NEW TRANSACTION FROM PEER " + newBlockHash.toString() + " @@@@@@@@@@@@@@@@@@@@@")
-              pubSubTransaction(new Buffer(link))
-            })
-
             ipfsPeerPublish().then((path) => {
               console.log("Successful initialization, starting...")
+
+              pubSub.on('block', (newBlockHash) => {
+                if (newBlockHash !== blockHash) {
+                  console.log("PubSub: Received from peer a candidate block: " + newBlockHash)
+                  pubSubBlock(new Buffer(newBlockHash), false)
+                }
+              })
+
+              pubSub.on('transaction', (link) => {
+                console.log("PubSub: Received from peer a candidate transaction: " + link)
+                pubSubTransaction(new Buffer(link))
+              })
+
               CRON_ON = true
             })
 
