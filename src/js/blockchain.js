@@ -128,11 +128,6 @@ var blockchain = function (node) {
   var roundBlockParent = null
   var roundTime = null
 
-  /* Node */
-  var server = node.listen(CLIENT_PORT, function() {
-    console.log("Listening on port %d", server.address().port)
-  })
-
   initializeLocalState()
 
 /***************************** HELPER FUNCTIONS ******************************/
@@ -913,19 +908,20 @@ var blockchain = function (node) {
 
       var newBlockPayload = {
         Data: "",
-        Links: newTransactionLinks.slice().push({
-          name: "parent",
-          hash: blockHash
-        })
+        Links: newTransactionLinks.slice()
       }
 
+      newBlockPayload.Links.push({
+        name: "parent",
+        hash: blockHash
+      })
+
       ipfsWritePayload(newBlockPayload).then((hash) => {
-        logger(hash)
+
         teeProofOfLuckMine(blockHash, (err, proof) => {
           if (err) {
             logger(err)
           } else {
-            logger("returned from tee pol mine")
             var newBlock = {
               Data : {
                 luck: proof.luck,
@@ -1071,6 +1067,8 @@ var blockchain = function (node) {
       if (!containsObject(newBlockHash, seenBlockHashes) && !equal(newBlock, block)) {
 
         ipfsConstructChain(newBlockHash).then((newChain) => {
+          logger("pubSub: constructed chain from newBlockHash")
+
           seenBlockHashes.push(newBlockHash)
 
           /* Check if newChain is valid and luckier than our current chain */
@@ -1258,6 +1256,10 @@ var blockchain = function (node) {
 
   node.get("/", function (req, res, next) {
     res.render("template")
+  })
+
+  var server = node.listen(CLIENT_PORT, function() {
+    console.log("Listening on port %d", server.address().port)
   })
 
 /*****************************************************************************/

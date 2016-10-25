@@ -45,6 +45,8 @@ Lastly, start the application:
 npm start
 ```
 
+In the case that IPFS has issues managing files, it is likely due to a low limit for open files. To increase the number of open file descriptors, run `ulimit -n 2560`. To check that it worked, `run ulimit -a`.
+
 ## Development
 
 If you wish to develop on your own ipfs network of peers, go into `storage/id` and change the application id. This is ipfs' point of reference for discovering all application relevant peers.
