@@ -313,6 +313,7 @@ var coreApp = function (options) {
 
   var LOG_DATA = "----------------------------------------------------------------------"
 
+  /* Prints the current peers every ROUND_TIME interval by the caller. */ 
   function printInterval() {
     console.log("[----- ROUND TIME: " + ROUND_TIME + " SECONDS -----]")
     console.log("Current list of peers: ")
@@ -320,7 +321,7 @@ var coreApp = function (options) {
     else console.log(JSON.stringify(pubSub.getPeers()))
   }
 
-  /* Prints debug relevant messages */
+  /* Prints debug relevant messages. */
   function logger(message, error) {
     if (process.env.DEBUG) {
       console.log("# " + message)
@@ -330,16 +331,17 @@ var coreApp = function (options) {
     }
   }
 
-  /* Prints message for internal testing only */
+  /* Prints message for internal testing only. */
   function dlog(message) {
     console.log(message)
   }
 
-  /* Returns the current timestamp */
+  /* Returns the current timestamp. */
   function currentTimestamp() {
     return (new Date).getTime()
   }
 
+  /* Parses the given data, converting any strings to JSON objects. */
   function parseIPFSObject(data) {
     if (typeof data === "string") data = JSON.parse(data)
     if (typeof data.Data === "string") data.Data = JSON.parse(data.Data)
@@ -347,7 +349,7 @@ var coreApp = function (options) {
     return data
   }
 
-  /* Returns true if obj is contained in array, otherwise false */
+  /* Returns true if obj is contained in array, otherwise false. */
   function containsObject(obj, array) {
     for (var i = 0; i < array.length; i++) {
       if (equal(obj, array[i])) return true
@@ -833,12 +835,27 @@ var coreApp = function (options) {
 
 /********************************* ALGORITHM 4 *******************************/
 
+/**
+ * This function is a TEE method that sets the state of roundBlock
+ * and roundTime. The trusted time service teeGetTrustedTime() represents
+ * a standard method provided as part of the TEE and is used as 
+ * verification for ROUND_TIME when mining a new block.
+ */
   function teeProofOfLuckRound(thisBlock, thisChain) {
     roundBlock = thisBlock
     roundBlockParent = thisChain[0].parent
     roundTime = teeGetTrustedTime()
   }
 
+/**
+ * This function is a TEE method that uses the given blockhash and
+ * starts by checking the required ROUND_TIME has elapsed before
+ * proceeding to generate a new luck value, using it to compute an
+ * f(l) which determines the amount of time the TEE will sleep.
+ * Upon return from sleeping f(l) duration, the function returns
+ * a teeReport() that includes the luck value and nonce, which is
+ * defined to be the given blockhash.
+ */
   function teeProofOfLuckMine(headerParentHash, callback) {
     if (headerParentHash !== blockHash || (chain[0].parent !== roundBlockParent && chain[0].parent !== 'GENESIS')) {
       callback("teeProofOfLuckMine error: header and parent mismatch", null)
@@ -870,7 +887,20 @@ var coreApp = function (options) {
 
 /********************************* ALGORITHM 5 *******************************/
 
-  /* Extending a blockchain with a new block. */
+/**
+ * This function is responsible for constructing a new block with the
+ * provided uncommitted transaction links, which can be empty.
+ *
+ * Starting with the uncommitted transaction links, the function
+ * constructs a payload object, pushing the current blockhash, which
+ * represents the parent, and writes it to IPFS to get the multihash.
+ * The multihash is then provided as a nonce to the TEE method
+ * teeProofOfLuckMine, which returns a proof that is appended to the
+ * a newly constructed block in accordance to the blockchain protocol.
+ * The block is then written to IPFS and the corresponding blockhash
+ * (multihash) represents the new commit, which is returned to the
+ * calling function.
+ */
   function commit(newTransactionLinks) {
     logger("commit")
     return new Promise((resolve) => {
@@ -919,7 +949,13 @@ var coreApp = function (options) {
 
 /********************************* ALGORITHM 6 *******************************/
 
-  /* Computing the luck of a valid blockchain. */
+/**
+ * This function computes the total luck value of the given chain by
+ * iterating through each block and invoking the TEE method teeReportData()
+ * to get the trusted luck value and summing to a running total. After
+ * all blocks are visited, the function returns the total luck value
+ * of the given blockchain.
+ */
   function luck(thisChain) {
     var totalLuck = 0
     for (var i = 0; i < thisChain.length; i++) {
@@ -938,7 +974,14 @@ var coreApp = function (options) {
 
 /********************************* ALGORITHM 7 *******************************/
 
-  /* Returns true if the newChain is in accordance to the structure of our specified chain */
+/**
+ * This function verifies the validity the given chain by confirming
+ * it is a object with correct parameters (parent, attestation, payload,
+ * length) and verifying that the blockchain data includes a valid 
+ * attestation by generating a report from the TEE. If every block
+ * in the provided chain follows our defined structure, then and only then
+ * does the method return true; otherwise, it returns false.
+ */
   function validChain(newChain) {
     if (!validObject(newChain)) {
       return false
@@ -954,13 +997,6 @@ var coreApp = function (options) {
       for (var i = 0; i < testChain.length; i++) {
         var testBlock = testChain[i]
         var report = teeReportData(testBlock.attestation)
-
-        // dlog(testBlock)
-        // dlog(report)
-        // dlog(!validObject(testBlock))
-        // dlog(testBlock.parent !== previousBlockHash)
-        // dlog(!teeValidAttestation(testBlock.attestation))
-        // dlog(testBlock.payload !== "GENESIS" && report.nonce !== testBlock.parent)
 
         if (!validObject(testBlock)) {
           return false
@@ -981,12 +1017,40 @@ var coreApp = function (options) {
 
 /********************************* ALGORITHM 8 *******************************/
 
+/**
+ * This function invokes teeProofOfLuckRound() in Algorithm 4 which
+ * sets state on our roundBlock and roundTime, then invokes our 
+ * resetCallback() function to construct a new commit and publish
+ * the candidate block to peers.
+ */
   function newRound(newBlock, newChain) {
     logger("newRound")
     teeProofOfLuckRound(newBlock, newChain)
     resetCallback()
   }
 
+/**
+ * This function handles all PubSub requests that are blocks by
+ * parsing the blockhash, a Buffer, and verifying the reconstructed
+ * block referenced by the blockhash is of valid format as defined by
+ * the blockchain protocol. It will then proceed to reconstruct the
+ * entire blockchain referenced by the provided block head and
+ * determine if this chain is luckier than our application's existing
+ * chain.
+ *
+ * If the new chain is determined to be luckier, it will write the
+ * new blockhash to local state and to local storage, then proceed
+ * to filter any overlapping transactions between the new blockchain
+ * and list of uncommited transactions.
+ *
+ * Only after all of these procedures succeeds will the protocol
+ * proceed to:
+ *   1. Publish the valid and winning blockhash to connected peers.
+ *   2. Proceed to start a newRound() of mining with the newBlock
+ *      and newChain reference, if the roundBlock is not defined or
+ *      if the parent hash of the new blockchain does not match the
+ *      roundBlock's parent hash.
+ */
   function pubSubBlock(newBlockHash) {
     logger("pubSubBlock - " + newBlockHash.toString())
 
@@ -1046,7 +1110,16 @@ var coreApp = function (options) {
       }
     })
   }
-    
+  
+/**
+ * This function handles all PubSub requests that are transactions
+ * by parsing the transaction link, a Buffer, verifying it is of valid
+ * format as defined by our blockchain protocol, and proceeds to:
+ *   1. Publish the valid transaction link to connect peers.
+ *   2. Write the valid transaction link to the local list of
+ *      uncommitted transactions and to local storage should the
+ *      client disconnect or fail.
+ */
   function pubSubTransaction(link) {
     logger("pubSub: transaction - " + link.toString())
 
@@ -1069,7 +1142,11 @@ var coreApp = function (options) {
     }
   }
 
-  /* Construct a new commit to update block head */
+/**
+ * This function invokes commit() with the current list of uncommited
+ * transactions, which can be empty, to construct a new commit (block).
+ * The blockhash is then published as a challenger for the new block head.
+ */
   function resetCallback() {
     var newTransactionLinks = transactions.Links.slice()
     commit(newTransactionLinks).then((newBlockHash) => {
@@ -1077,11 +1154,11 @@ var coreApp = function (options) {
     })
   }
 
-  /**
-   * Functions as the heartbeat of the blockchain, invoking round update 
-   * after successful initialization, calling resetCallback() if a block
-   * update has not already occured during this ROUND_TIME.
-   */
+/**
+ * Functions as the heartbeat of the blockchain, invoking round update 
+ * after successful initialization, calling resetCallback() if a block
+ * update has not already occured during this ROUND_TIME.
+ */
   var roundInterval = new cron("*/" + ROUND_TIME + " * * * * *", function() {
     if (CRON_ON) {
       printInterval()
