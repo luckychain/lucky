@@ -1,1 +1,1 @@
-web: make; node ./src/js/server-app.js;
+web: make; node ./src/js/server.js;

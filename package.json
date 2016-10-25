@@ -1,7 +1,7 @@
 {
   "name": "lucky-js",
   "version": "1.0.0",
-  "main": "./src/js/server-app.js",
+  "main": "./src/js/server.js",
   "scripts": {
     "build-js": "browserify -dt reactify ./src/js/browser-app.js -o ./public/javascripts/bundle.js -v",
     "build-css": "cat ./public/stylesheets/styles/*.css > ./public/stylesheets/bundle.css",
@@ -30,6 +30,7 @@
     "oboe": "^2.1.2",
     "peer-id": "^0.7.0",
     "peer-info": "^0.7.1",
+    "pubngrok": "^2.0.1",
     "react": "^0.13.3",
     "react-bootstrap": "^0.23.0",
     "react-tools": "^0.13.3",
