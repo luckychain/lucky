@@ -425,7 +425,7 @@ var blockchain = function (node) {
 
       var peerInfo = {
         address: peerAddress,
-        topics: []
+        topics: ['block', 'transaction']
       }
 
       pubSub.connect(peerInfo)
@@ -1072,6 +1072,9 @@ var blockchain = function (node) {
           seenBlockHashes.push(newBlockHash)
 
           /* Check if newChain is valid and luckier than our current chain */
+          logger(validChain(newChain))
+          logger(luck(newChain))
+          logger(luck(chain))
           if (validChain(newChain) && luck(newChain) > luck(chain)) {
             logger("pubSub: found luckier block")
 
