@@ -30,7 +30,6 @@
     "oboe": "^2.1.2",
     "peer-id": "^0.7.0",
     "peer-info": "^0.7.1",
-    "pubngrok": "^2.0.2",
     "react": "^0.13.3",
     "react-bootstrap": "^0.23.0",
     "react-tools": "^0.13.3",
