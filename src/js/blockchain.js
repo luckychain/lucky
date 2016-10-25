@@ -2,26 +2,20 @@ var async = require("async")
 var cron = require("cron").CronJob
 var equal = require("deep-equal")
 var fs = require("fs")
-var libp2pIPFS = require('libp2p-ipfs')
-var multiaddr = require('multiaddr')
 var ngrok = require('ngrok')
 var oboe = require("oboe")
-var PeerId = require('peer-id')
-var PeerInfo = require('peer-info')
 var pubngrok = require('pubngrok')
 var request = require('request')
-var series = require('run-series')
 var _ = require("underscore")
 
 var ipfs = require("ipfs-api")
 ipfs = new ipfs("localhost", "5001")
 
-var PSG = require('./pubsub')
-
 var blockchain = function (node) {
 
 /******************************** STRUCTURE **********************************/
-  /*
+  
+  /**
    * Chain: (Internal Use)
    * [
    *   {
@@ -99,27 +93,22 @@ var blockchain = function (node) {
   /* Storage */
   var DIRECTORY = "storage"
   var ID_DIRECTORY = DIRECTORY + "/id"
-  var PUBSUB_DIRECTORY = DIRECTORY + "/pubsub.json"
   var PUBGROK_DIRECTORY = DIRECTORY + "/pubgrok"
   var BLOCK_DIRECTORY = DIRECTORY + "/block"
   var TRANSACTIONS_DIRECTORY = DIRECTORY + "/transactions"
 
   /* Blockchain */
   var CRON_ON = false /* System state */
-  var roundUpdate = false
+  var intervalUpdate = false
   var block = {}
   var blockHash = ""
   var transactions = {}
   var chain = []
 
   /* PubSub */
-  var PUBSUB_LOCAL = false
   var seenBlockHashes = []
-  var pubSubID = {}
   var IPFS_ID = ""
-  var p2pnode
   var pubSub
-  var Peer
 
   /* TEE */
   var teeInternalCounter = 1
@@ -216,101 +205,40 @@ var blockchain = function (node) {
   function initializePubSub() {
     logger("initializePubSub")
     return new Promise((resolve) => {
-      if (PUBSUB_LOCAL) {
-        /* Load Pubsub */
-        fs.readFile(PUBSUB_DIRECTORY, function (err, res) {
-          console.log("Initializing local PubSub state...")
-        
-          var ps
-          if (err || !validObject(res.toString())) {
-            ps = PeerId.create({ bits: 2048 }).toJSON()
-            var id = PeerId.createFromJSON(ps)
-            fs.writeFile(PUBSUB_DIRECTORY, JSON.stringify(ps, null, 2), null)
-          }
-          else {
-            ps = JSON.parse(res.toString())
-            var id = PeerId.createFromJSON({
-              id: ps.id,
-              privKey: ps.privKey,
-              pubKey: ps.pubKey
-            })
-          }
+      ngrok.connect(CLIENT_PORT, function (err, address) {
+        if (err) {
+          console.log(err)
+        }
+        else {
+          console.log('Publisher listening on:', address)
 
-          var peer = new PeerInfo(id)
-          peer.multiaddr.add(multiaddr('/ip4/0.0.0.0/tcp/10333'))
+          fs.writeFile(PUBGROK_DIRECTORY, address, null)
 
-          p2pnode = new libp2pIPFS.Node(peer)
-          p2pnode.start((err) => {
-            if (err) throw err
+          pubSub = new pubngrok(node, address)
+          pubSub.subscribe('block')
+          pubSub.subscribe('transaction')
 
-            ps.addrs = []
-            console.log('Publisher listening on:')
-            peer.multiaddrs.forEach((ma) => {
-              console.log(ma.toString() + '/ipfs/' + id.toB58String())
-              ps.addrs.push(ma.toString() + '/ipfs/' + id.toB58String())
-            })
-
-            fs.writeFile(PUBSUB_DIRECTORY, JSON.stringify(ps, null, 2), null)
-
-            ipfsPeerPublish().then((path) => {
-              console.log("Successful initialization, starting...")
-              CRON_ON = true
-            })
-
-            pubSub = new PSG(p2pnode)
-            pubSub.subscribe('block')
-            pubSub.subscribe('transaction')
+          ipfsPeerPublish().then((path) => {
+            console.log("Successful initialization, starting...")
 
             pubSub.on('block', (newBlockHash) => {
-              if (newBlockHash.toString() !== blockHash) {
-                pubSubBlock(newBlockHash, false)
+              if (newBlockHash !== blockHash) {
+                console.log("PubSub: Received from peer a candidate block: " + newBlockHash)
+                pubSubBlock(new Buffer(newBlockHash), false)
               }
             })
 
             pubSub.on('transaction', (link) => {
-              pubSubTransaction(link)
+              console.log("PubSub: Received from peer a candidate transaction: " + link)
+              pubSubTransaction(new Buffer(link))
             })
 
-            resolve()
+            CRON_ON = true
           })
-        })
-      }
-      else {
-        ngrok.connect(CLIENT_PORT, function (err, address) {
-          if (err) {
-            console.log(err)
-          }
-          else {
-            console.log('Publisher listening on:', address)
 
-            fs.writeFile(PUBGROK_DIRECTORY, address, null)
-
-            pubSub = new pubngrok(node, address)
-            pubSub.subscribe('block')
-            pubSub.subscribe('transaction')
-
-            ipfsPeerPublish().then((path) => {
-              console.log("Successful initialization, starting...")
-
-              pubSub.on('block', (newBlockHash) => {
-                if (newBlockHash !== blockHash) {
-                  console.log("PubSub: Received from peer a candidate block: " + newBlockHash)
-                  pubSubBlock(new Buffer(newBlockHash), false)
-                }
-              })
-
-              pubSub.on('transaction', (link) => {
-                console.log("PubSub: Received from peer a candidate transaction: " + link)
-                pubSubTransaction(new Buffer(link))
-              })
-
-              CRON_ON = true
-            })
-
-            resolve()
-          }
-        })
-      }
+          resolve()
+        }
+      })
     })
   }
 
@@ -320,8 +248,7 @@ var blockchain = function (node) {
   function printInterval() {
     console.log("[----- ROUND TIME: " + ROUND_TIME + " SECONDS -----]")
     console.log("Current list of peers: ")
-    if (PUBSUB_LOCAL) console.log(Object.keys(pubSub.getPeerSet()))
-    else console.log(JSON.stringify(pubSub.getPeers()))
+    console.log(JSON.stringify(pubSub.getPeers(), null, 2))
   }
 
   /* Prints debug relevant messages. */
@@ -365,7 +292,7 @@ var blockchain = function (node) {
 /**
  * This function adds the directory and uses the hash of this
  * application id to discover peers who are a part of this blockchain
- * application and invokes a method to attempt a connection.
+ * application and attempt a connection to the peer for PubSub.
  */
   function ipfsPeerDiscover() {
     logger("ipfsPeerDiscover")
@@ -382,55 +309,24 @@ var blockchain = function (node) {
             if (id !== IPFS_ID) {
               logger("ipfsPeerDiscover: " + id)
 
-              if (PUBSUB_LOCAL) {
-                ipfsPubSub(id)
-              } else {
-                ipfsPubGrok(id)
-              }
+              ipfsPeerResolve(id).then((path) => {
+                return ipfsGetData(path, "/pubgrok")
+              }).then((peerAddress) => {
+                console.log("Dialing " + peerAddress)
+
+                var peerInfo = {
+                  address: peerAddress,
+                  topics: ['block', 'transaction']
+                }
+
+                pubSub.connect(peerInfo)
+              })
             }
           }
         }).fail(function() {
           console.log("error: ipfsPeerDiscover failed to find peers")
         })
       }
-    })
-  }
-
-  function ipfsPubSub(peerID) {
-    logger("ipfsPubSub")
-    ipfsPeerResolve(peerID).then((path) => {
-      return ipfsGetData(path, "/pubsub.json")
-    }).then((p2pID) => {
-      console.log("Dialing " + p2pID.id)
-      var id = PeerId.createFromJSON({
-        id: p2pID.id,
-        privKey: p2pID.privKey,
-        pubKey: p2pID.pubKey
-      })
-
-      var peer = new PeerInfo(id)
-
-      p2pID.addrs.forEach((addr) => {
-        peer.multiaddr.add(multiaddr(addr))
-      })
-
-      pubSub.connect(peer)
-    })
-  }
-
-  function ipfsPubGrok(peerID) {
-    logger("ipfsPubGrok")
-    ipfsPeerResolve(peerID).then((path) => {
-      return ipfsGetData(path, "/pubgrok")
-    }).then((peerAddress) => {
-      console.log("Dialing " + peerAddress)
-
-      var peerInfo = {
-        address: peerAddress,
-        topics: ['block', 'transaction']
-      }
-
-      pubSub.connect(peerInfo)
     })
   }
 
@@ -1054,7 +950,7 @@ var blockchain = function (node) {
  *      if the parent hash of the new blockchain does not match the
  *      roundBlock's parent hash.
  *
- * Lastly, roundUpdate is set to true if the pubSubBlock()
+ * Lastly, intervalUpdate is set to true if the pubSubBlock()
  * invocation came from a peer. In this case, as the block head
  * update was successful, we will not invoke the resetCallback()
  * method for this interval, as part of the blockchain protocol.
@@ -1110,15 +1006,11 @@ var blockchain = function (node) {
 
                     /* Set the update for this interval to true */
                     if (!selfInvocation) {
-                      roundUpdate = true
+                      intervalUpdate = true
                     }
 
                     /* Publish it to peers */
-                    if (PUBSUB_LOCAL) {
-                      pubSub.publish('block', new Buffer(newBlockHash))
-                    } else {
-                      pubSub.publish('block', newBlockHash)
-                    }
+                    pubSub.publish('block', newBlockHash)
 
                     /* Start a new round of mining */
                     if (roundBlock === null || roundBlock === undefined) {
@@ -1157,11 +1049,7 @@ var blockchain = function (node) {
         if (validTransactionPayload(txPayload)) {
 
           /* Publish it to peers */
-          if (PUBSUB_LOCAL) {
-            pubSub.publish('transaction', new Buffer(link))
-          } else {
-            pubSub.publish('transaction', link.toString())
-          }
+          pubSub.publish('transaction', link.toString())
 
           /* Write it to local state */
           localWriteTransactionLink(txLink).then(() => {
@@ -1192,15 +1080,14 @@ var blockchain = function (node) {
   var roundInterval = new cron("*/" + ROUND_TIME + " * * * * *", function() {
     if (CRON_ON) {
       printInterval()
-      // if (PUBSUB_LOCAL) {
-      //   if (Object.keys(pubSub.getPeerSet()).length === 0) ipfsPeerDiscover()
-      // }
-      // else if (pubSub.getPeers().length === 0) ipfsPeerDiscover()
+      
+      /* Discover peers if there are currently no peer connections. */
+      if (pubSub.getPeers().length === 0) ipfsPeerDiscover()
 
-      if (!roundUpdate) {
+      if (!intervalUpdate) {
         resetCallback(true)
       }
-      roundUpdate = false
+      intervalUpdate = false
     }
   }, null, true)
   
@@ -1251,15 +1138,8 @@ var blockchain = function (node) {
   })
 
   node.get("/peers", function (req, res, next) {
-    var peerList
-    if (PUBSUB_LOCAL) {
-      peerList = Object.keys(pubSub.getPeerSet())
-    } else {
-      peerList = pubSub.getPeers()
-    }
-
     res.status(200).json({
-      peers: peerList
+      peers: pubSub.getPeers()
     })
   })
 
