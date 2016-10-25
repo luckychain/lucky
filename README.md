@@ -54,9 +54,3 @@ To test that the server is working, start the application and run:
 $ curl localhost:8000/echo?message='hello'
 {"message":"hello","datetime":"2016-06-19T01:08:16.979Z"}
 ```
-
-## Directory structure
-
-* server-app.js - Initializes server, calls core-app.js
-* core-app.js - Fulfills core server functions
-* browser-app.js - Simple front-end interface
