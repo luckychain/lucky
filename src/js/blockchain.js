@@ -117,7 +117,14 @@ var blockchain = function (node) {
   var roundBlockParent = null
   var roundTime = null
 
+  /* Initialize Blockchain State */
   initializeLocalState()
+
+  /* Server / Socket Setup */
+  var server = node.listen(CLIENT_PORT, function() {
+    console.log("Listening on port %d", server.address().port)
+  })
+  var io = require('socket.io')(server)
 
 /***************************** HELPER FUNCTIONS ******************************/
 
@@ -1007,6 +1014,9 @@ var blockchain = function (node) {
                     /* Publish it to peers */
                     pubSub.publish('block', newBlockHash)
 
+                    /* Send via socket to clients */
+                    io.emit('chainResult', chain);
+
                     /* Start a new round of mining */
                     if (roundBlock === null || roundBlock === undefined) {
                       newRound(newBlock, newChain, selfInvocation)
@@ -1075,6 +1085,8 @@ var blockchain = function (node) {
   var roundInterval = new cron("*/" + ROUND_TIME + " * * * * *", function() {
     if (CRON_ON) {
       printInterval()
+
+      io.emit('peersResult', pubSub.getPeers());
       
       /* Discover peers if there are currently no peer connections. */
       if (pubSub.getPeers().length === 0) ipfsPeerDiscover()
@@ -1085,6 +1097,20 @@ var blockchain = function (node) {
       intervalUpdate = false
     }
   }, null, true)
+
+/********************************** SOCKET ***********************************/
+
+  io.on('connection', function (socket) {
+    console.log('Client connected');
+    
+    socket.on('peers', function () {
+      socket.emit('peersResult', pubSub.getPeers());
+    });
+
+    socket.on('chain', function () {
+      socket.emit('chainResult', chain);
+    });
+  });
   
 /********************************** NETWORK **********************************/
 
@@ -1122,7 +1148,11 @@ var blockchain = function (node) {
             })
           }
         })
+      } else {
+        res.status(400).json({ error: "invalid" })
       }
+    } else {
+      res.status(400).json({ error: "invalid" })
     }
   })
 
@@ -1140,10 +1170,6 @@ var blockchain = function (node) {
 
   node.get("/", function (req, res, next) {
     res.render("template")
-  })
-
-  var server = node.listen(CLIENT_PORT, function() {
-    console.log("Listening on port %d", server.address().port)
   })
 
 /*****************************************************************************/

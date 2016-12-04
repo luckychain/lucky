@@ -10,6 +10,7 @@ var Well = require('react-bootstrap/lib/Well');
 var Input = require('react-bootstrap/lib/Input');
 var FormGroup = require('react-bootstrap/lib/FormGroup');
 
+var io = require('socket.io-client');
 var request = require('request');
 
 var baseURL = window.location.protocol + "//" + window.location.host;
@@ -28,32 +29,27 @@ var Blockchain = React.createClass({
 
   getChain: function() {
     var that = this;
-    var url = baseURL + '/chain';
-    request({
-      url: url, 
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-    }, function (error, response, body) {
-      if (body) {
-        var chain = JSON.parse(body).chain;
+    this.socket = io();
+    this.socket.emit('chain');
+    this.socket.on('chainResult', function (body) {
+      var chain = body;
 
-        var blocks = [];
-        for (var i = 0; i < chain.length; i++) {
-          var block = chain[i];
-          blocks.push({
-            id: i,
-            attestation: block.attestation,
-            hash: block.hash,
-            luck: block.luck,
-            parent: block.parent,
-            transactions: block.transactions,
-          });
-        }
-
-        that.setState({
-          blocks: blocks
+      var blocks = [];
+      for (var i = 0; i < chain.length; i++) {
+        var block = chain[i];
+        blocks.unshift({
+          id: i,
+          attestation: block.attestation,
+          hash: block.hash,
+          luck: block.luck,
+          parent: block.parent,
+          transactions: block.transactions,
         });
       }
+
+      that.setState({
+        blocks: blocks
+      });
     });
   },
 
@@ -67,9 +63,9 @@ var Blockchain = React.createClass({
         <PageHeader>Blockchain</PageHeader>
         <PanelGroup activeKey={this.state.activeKey} onSelect={this.handleSelect} accordion>
           {
-            this.state.blocks.map((item) => {
+            this.state.blocks.map((item, index) => {
               return (
-                <Panel header={"Block " + item.id + ": " + item.hash} eventKey={item.id} key={item.id}>
+                <Panel header={"Block " + item.id + ": " + item.hash} eventKey={item.id} key={index}>
                   <p><strong>Luck:</strong> {item.luck}</p>
                   <p><strong>Parent:</strong> {item.parent}</p>
                   <p><strong>Attestation:</strong> {JSON.stringify(item.attestation, null, 2)}</p>
@@ -155,22 +151,15 @@ var Peers = React.createClass({
 
   getPeers: function() {
     var that = this;
-    var url = baseURL + '/peers';
-    request({
-      url: url, 
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-    }, function (error, response, body) {
-      if (body) {
-        var body = JSON.parse(body);
-
-        var peers = [];
-        for (var i = 0; i < body.peers.length; i++) {
-          peers.push({ id: i, address: body.peers[i] });
-        }
-
-        that.setState({ peers: peers });
+    this.socket = io();
+    this.socket.emit('peers');
+    this.socket.on('peersResult', function (body) {
+      var peers = [];
+      for (var i = 0; i < body.length; i++) {
+        peers.push({ id: i, address: body[i] });
       }
+
+      that.setState({ peers: peers });
     });
   },
 
