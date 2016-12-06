@@ -65,7 +65,7 @@ var Blockchain = React.createClass({
           {
             this.state.blocks.map((item, index) => {
               return (
-                <Panel header={"Block " + item.id + ": " + item.hash} eventKey={item.id} key={index}>
+                <Panel header={"Block " + item.id + ": " + item.hash} eventKey={item.id} key={item.id}>
                   <p><strong>Luck:</strong> {item.luck}</p>
                   <p><strong>Parent:</strong> {item.parent}</p>
                   <p><strong>Attestation:</strong> {JSON.stringify(item.attestation, null, 2)}</p>
