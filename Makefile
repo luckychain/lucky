@@ -7,7 +7,7 @@ make-js:
 	if test -d ./public/javascripts; then echo "public/javascripts exists"; else mkdir ./public/javascripts; fi
 
 ./public/javascripts/bundle.js:
-	./node_modules/.bin/browserify -d -t reactify ./src/js/browser-app.js > $@
+	./node_modules/.bin/browserify -d -t [ babelify --presets [ es2015 react ] ] ./src/js/browser-app.js > $@
 
 css:
 	cat ./public/stylesheets/styles/*.css > ./public/stylesheets/bundle.css

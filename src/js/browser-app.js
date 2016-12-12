@@ -1,4 +1,6 @@
-var React = require('react')
-var Layout = require('../jsx/layout.jsx')
+import React from 'react';
+import {Router, browserHistory} from 'react-router';
+import ReactDOM from 'react-dom';
+import routes from '../jsx/routes';
 
-React.render(<Layout title="lucky" pathname={window.location.pathname} />, document.body)
+ReactDOM.render(<Router history={browserHistory}>{routes}</Router>, document.getElementById('app'));

@@ -1168,7 +1168,7 @@ var blockchain = function (node) {
     })
   })
 
-  node.get("/", function (req, res, next) {
+  node.get("*", function (req, res, next) {
     res.render("template")
   })
 
