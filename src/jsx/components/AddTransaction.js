@@ -34,16 +34,11 @@ class AddTransaction extends React.Component {
         if (!this.validObject(txp)) return false;
         else {
             if (typeof txp === "string") {
-                try
-                {
+                try {
                     txp = JSON.parse(txp);
-                }
-                catch(e)
-                {
+                } catch(e) {
                     return false;
                 }
-
-
             }
             return this.validObject(txp.Data);
         }

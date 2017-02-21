@@ -23,11 +23,9 @@ class AppActions {
         this.socket.emit('chain');
         this.socket.on('chainResult', function (body) {
             var chain = body;
-
             var blocks = [];
             for (var i = 0; i < chain.length; i++) {
                 var block = chain[i];
-                console.log(block);
                 blocks.unshift({
                     id: i,
                     attestation: block.attestation,

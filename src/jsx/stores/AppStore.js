@@ -7,50 +7,7 @@ class AppStore {
         this.bindActions(AppActions);
         this.peers = [];
         this.blocks = [];
-        this.treeData;
         this.activeKey;
-    }
-
-    formatTreeData(data) {
-
-        data = map(data, function(item){
-            var i = clone(item);
-            i.parentHash = i.parent;
-            return i;
-        });
-
-        //console.log(data);
-
-        // create a name: node map
-        var dataMap = data.reduce(function(map, node) {
-            map[node.hash] = node;
-            return map;
-        }, {});
-
-        console.log(dataMap);
-
-        // create the tree array
-        var treeData = [];
-        data.forEach(function(node) {
-            // add to parent
-            var parent = dataMap[node.parent];
-            if (parent === "GENESIS") {
-                parent = null;
-            }
-            if (parent) {
-                // create child array if it doesn't exist
-                (parent.children || (parent.children = []))
-                // add node to child array
-                    .push(node);
-            } else {
-                // parent is  or missing
-                treeData.push(node);
-            }
-        });
-
-        console.log(treeData);
-
-        return treeData;
     }
 
     onSetActiveKey(activeKey) {
@@ -72,7 +29,6 @@ class AppStore {
         }
 
     }
-
 
     onGetPeersSuccess(data) {
         /*if (data) {
@@ -106,14 +62,10 @@ class AppStore {
             }
             */
             this.blocks = data;
-            //console.log(this.blocks);
-            //this.treeData = blocks;
-            this.treeData = this.formatTreeData(data);
         }
     }
 
     onGetNewBlockSuccess(newBlock) {
-        console.log("hi");
         this.blocks.unshift({
             id: this.blocks.length,
             attestation: newBlock.attestation,

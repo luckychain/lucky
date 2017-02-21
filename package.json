@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "./src/js/server.js",
   "scripts": {
-    "start": "make; node ./src/js/server.js"
+    "start": "make && node ./src/js/server.js"
   },
   "dependencies": {
     "alt": "^0.17.8",
@@ -22,7 +22,6 @@
     "express": "~4.12.2",
     "foreman": "^1.4.1",
     "ipfs-api": "^4.0.2",
-    "jquery": "^3.1.1",
     "mime-db": "^1.23.0",
     "ngrok": "^2.2.3",
     "oboe": "^2.1.2",
@@ -37,7 +36,8 @@
     "request": "^2.72.0",
     "socket.io": "^1.7.1",
     "socket.io-client": "^1.7.1",
-    "underscore": "^1.8.3"
+    "underscore": "^1.8.3",
+    "secureworker": "git+ssh://git@github.com/sunblaze-ucb/node-secureworker.git#d6874f84286b7b56ae5f9aa2678b0320d0137a3e"
   },
   "engines": {
     "node": "5.1.0"

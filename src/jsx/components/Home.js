@@ -3,9 +3,6 @@ import {Grid, Row, Col, Panel, PanelGroup, Glyphicon} from 'react-bootstrap';
 import { withRouter } from 'react-router';
 import HomeStore from '../stores/HomeStore';
 import HomeActions from '../actions/HomeActions';
-import Tree from './Tree'
-
-
 
 class Home extends React.Component {
 
@@ -34,8 +31,7 @@ class Home extends React.Component {
     }
 
     handleSelect(activeKey) {
-
-        if(activeKey === this.props.activeKey) {
+        if (activeKey === this.props.activeKey) {
             this.props.router.push('/');
             this.props.setActiveKey(null);
         } else {
@@ -43,13 +39,10 @@ class Home extends React.Component {
             this.props.setActiveKey(activeKey);
         }
     }
-    
 
     render() {
-
-        console.log(this.props);
         var blocks = this.props.blocks;
-        if (!this.state.sortDown){
+        if (!this.state.sortDown) {
             blocks = blocks.slice().reverse();
         }
         return (
@@ -60,7 +53,6 @@ class Home extends React.Component {
                             <PanelGroup activeKey={this.props.activeKey} onSelect={this.handleSelect.bind(this)} accordion>
                                 {
                                     blocks.map((item) => {
-                                        //console.log(item.transactions);
                                         return (
                                             <Panel key={item.id} eventKey={item.hash} header={"Block " + item.id + ": " + item.hash}>
                                                 <p><strong>Luck:</strong> {item.luck}</p>
@@ -69,7 +61,7 @@ class Home extends React.Component {
                                                 <p><strong>Transactions:</strong>
                                                     {
                                                         item.transactions.map((tx) => {
-                                                            return (<span key={tx.hash}>{tx.hash}</span>);
+                                                            return (<span key={tx.hash}>{tx.hash}      {tx.data.Data}</span>);
                                                         })
                                                     }
                                                 </p>
