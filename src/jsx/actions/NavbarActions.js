@@ -5,7 +5,6 @@ class NavbarActions {
     constructor() {
         this.generateActions(
             'updateOnlineUsers',
-            'updateAjaxAnimation',
             'updateSearchQuery',
         );
     }

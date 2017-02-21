@@ -3,7 +3,6 @@ import {Grid, Row, Col, Panel, PanelGroup, Glyphicon} from 'react-bootstrap';
 import { withRouter } from 'react-router';
 import HomeStore from '../stores/HomeStore';
 import HomeActions from '../actions/HomeActions';
-import Tree from './Tree'
 
 class Home extends React.Component {
 
@@ -40,11 +39,8 @@ class Home extends React.Component {
             this.props.setActiveKey(activeKey);
         }
     }
-    
 
     render() {
-
-        console.log(this.props);
         var blocks = this.props.blocks;
         if (!this.state.sortDown) {
             blocks = blocks.slice().reverse();

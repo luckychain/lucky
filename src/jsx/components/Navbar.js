@@ -41,24 +41,7 @@ class Navbar extends React.Component {
         return (
             <div className='navbar navbar-default navbar-fixed-top'>
                 <div className='navbar-header'>
-                    <button type='button' className='navbar-toggle collapsed' data-toggle='collapse' data-target='#navbar'>
-                        <span className='sr-only'>Toggle navigation</span>
-                        <span className='icon-bar'></span>
-                        <span className='icon-bar'></span>
-                        <span className='icon-bar'></span>
-                    </button>
                     <Link to='/' onClick={this.goHome.bind(this)} className='navbar-brand'>
-                        <span ref='triangles' className={'triangles animated ' + this.state.ajaxAnimationClass}>
-                          <div className='tri invert'></div>
-                          <div className='tri invert'></div>
-                          <div className='tri'></div>
-                          <div className='tri invert'></div>
-                          <div className='tri invert'></div>
-                          <div className='tri'></div>
-                          <div className='tri invert'></div>
-                          <div className='tri'></div>
-                          <div className='tri invert'></div>
-                        </span>
                         Luckychain
                         <span className='badge badge-up badge-danger'>{this.state.onlineUsers}</span>
                     </Link>
@@ -76,7 +59,6 @@ class Navbar extends React.Component {
                     </form>
                     <ul className='nav navbar-nav'>
                         <li onClick={this.goHome.bind(this)}><Link to='/'>Home</Link></li>
-                        <li><Link to='/tree'>Tree</Link></li>
                         <li><Link to='/add'>Add</Link></li>
                     </ul>
                 </div>
