@@ -42,3 +42,4 @@ storage/transactions
 storage/pubsub.json
 storage/pubgrok
 .bash_profile
+.idea
