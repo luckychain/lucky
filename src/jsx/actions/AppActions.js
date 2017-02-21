@@ -1,5 +1,4 @@
 import alt from '../alt';
-import $ from 'jquery';
 var io = require('socket.io-client');
 
 class AppActions {
@@ -10,6 +9,8 @@ class AppActions {
             'getPeersFail',
             'getChainSuccess',
             'getChainFail',
+            'getNewBlockSuccess',
+            'getNewBlockFail',
             'goHome',
             'searchSubmit',
             'setActiveKey',
@@ -26,6 +27,7 @@ class AppActions {
             var blocks = [];
             for (var i = 0; i < chain.length; i++) {
                 var block = chain[i];
+                console.log(block);
                 blocks.unshift({
                     id: i,
                     attestation: block.attestation,
@@ -38,7 +40,19 @@ class AppActions {
 
             that.actions.getChainSuccess(blocks);
         });
+        this.socket.on('blockResult', function (body) {
+            console.log(body);
+            that.actions.getNewBlockSuccess(body);
+        });
     }
+
+    /*getNewBlock() {
+        var that = this;
+        this.socket = io();
+        this.socket.on('blockResult', function (body) {
+            that.actions.getNewBlockSuccess(block);
+        });
+    }*/
 
     getPeers() {
         var that = this;

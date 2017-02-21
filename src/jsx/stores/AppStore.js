@@ -19,7 +19,7 @@ class AppStore {
             return i;
         });
 
-        console.log(data);
+        //console.log(data);
 
         // create a name: node map
         var dataMap = data.reduce(function(map, node) {
@@ -106,10 +106,22 @@ class AppStore {
             }
             */
             this.blocks = data;
-            console.log(this.blocks);
+            //console.log(this.blocks);
             //this.treeData = blocks;
             this.treeData = this.formatTreeData(data);
         }
+    }
+
+    onGetNewBlockSuccess(newBlock) {
+        console.log("hi");
+        this.blocks.unshift({
+            id: this.blocks.length,
+            attestation: newBlock.attestation,
+            hash: newBlock.hash,
+            luck: newBlock.luck,
+            parent: newBlock.parent,
+            transactions: newBlock.transactions,
+        });
     }
 }
 

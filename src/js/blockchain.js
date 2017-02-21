@@ -1014,7 +1014,7 @@ var blockchain = function (node) {
                     pubSub.publish('block', newBlockHash)
 
                     /* Send via socket to clients */
-                    io.emit('blockResult', chain);
+                    io.emit('blockResult', chain[chain.length-1])
 
                     /* Start a new round of mining */
                     if (roundBlock === null || roundBlock === undefined) {

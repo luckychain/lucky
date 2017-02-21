@@ -2,7 +2,6 @@ import React from 'react';
 import {Link, withRouter} from 'react-router';
 import NavbarStore from '../stores/NavbarStore';
 import NavbarActions from '../actions/NavbarActions';
-import $ from 'jquery';
 
 class Navbar extends React.Component {
     constructor(props) {
@@ -13,15 +12,6 @@ class Navbar extends React.Component {
 
     componentDidMount() {
         NavbarStore.listen(this.onChange);
-        $(document).ajaxStart(() => {
-            NavbarActions.updateAjaxAnimation('fadeIn');
-        });
-
-        $(document).ajaxComplete(() => {
-            setTimeout(() => {
-                NavbarActions.updateAjaxAnimation('fadeOut');
-            }, 750);
-        });
     }
 
     componentWillUnmount() {

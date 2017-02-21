@@ -54,12 +54,13 @@ class Home extends React.Component {
         }
         return (
             <Grid>
-                <Row className='flipInX animated'>
+                <Row>
                     <Col sm={12}>
                         <Panel header={(<span>Blockchain <Glyphicon glyph="sort" className='pull-right' style={{cursor:'pointer'}} onClick={this.flipOrder.bind(this)} />  </span>)}>
                             <PanelGroup activeKey={this.props.activeKey} onSelect={this.handleSelect.bind(this)} accordion>
                                 {
                                     blocks.map((item) => {
+                                        //console.log(item.transactions);
                                         return (
                                             <Panel key={item.id} eventKey={item.hash} header={"Block " + item.id + ": " + item.hash}>
                                                 <p><strong>Luck:</strong> {item.luck}</p>
