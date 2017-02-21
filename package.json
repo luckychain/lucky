@@ -20,7 +20,6 @@
     "deep-equal": "^1.0.1",
     "ejs": "^2.3.4",
     "express": "~4.12.2",
-    "foreman": "^1.4.1",
     "ipfs-api": "^4.0.2",
     "mime-db": "^1.23.0",
     "ngrok": "^2.2.3",
@@ -37,6 +36,7 @@
     "socket.io": "^1.7.1",
     "socket.io-client": "^1.7.1",
     "underscore": "^1.8.3",
+    "uuid": "^3.0.1",
     "secureworker": "git+ssh://git@github.com/sunblaze-ucb/node-secureworker.git#d6874f84286b7b56ae5f9aa2678b0320d0137a3e"
   },
   "engines": {

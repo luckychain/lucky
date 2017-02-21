@@ -7,8 +7,10 @@ var oboe = require("oboe")
 var pubngrok = require('pubngrok')
 var request = require('request')
 var _ = require("underscore")
-
 var ipfs = require("ipfs-api")
+
+var SecureWorker = require('./secureworker')
+
 ipfs = new ipfs("localhost", "5001")
 
 var blockchain = function (node) {
