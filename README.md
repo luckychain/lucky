@@ -30,6 +30,7 @@ $ ipfs init
 Start the IPFS daemon:
 
 ```
+$ ulimit -n 2048
 $ ipfs daemon
 ```
 
