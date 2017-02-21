@@ -257,9 +257,9 @@ var blockchain = function (node) {
 
   /* Prints the current peers every ROUND_TIME interval by the caller. */ 
   function printInterval() {
-    console.log(" [----- ROUND TIME: " + ROUND_TIME + " SECONDS -----]")
-    console.log(" Current list of peers: ")
-    console.log(" " + JSON.stringify(pubSub.getPeers(), null, 2))
+    console.log("[----- ROUND TIME: " + ROUND_TIME + " SECONDS -----]")
+    console.log("Current list of peers: ")
+    console.log(JSON.stringify(pubSub.getPeers(), null, 2))
   }
 
   /* Prints debug relevant messages. */
@@ -479,6 +479,7 @@ var blockchain = function (node) {
   /* Returns the first set bytes of the transaction payload given the hash */
   function ipfsGetTransactionPayload(hash) {
     return new Promise((resolve) => {
+      console.log(hash);
       ipfs.object.data(hash, { enc: "base58" }, (err, data) => {
         if (err) {
           logger("ipfsGetPayload error: ", err)
@@ -557,17 +558,23 @@ var blockchain = function (node) {
 
                   if (elem.name === "parent") {
                     internalBlock.parent = elem.hash
+
+                    if (i === payload.Links.length - 1) {
+                      newChain.unshift(internalBlock)
+                      nextBlockHash = internalBlock.parent
+                      callback(null, newChain)
+                    }
                   } else if (elem.name === "transaction" && validTransactionLink(elem)) {
                     ipfsGetTransactionPayload(elem.hash).then((txPayload) => {
                       elem.data = txPayload
                       internalBlock.transactions.push(elem)
-                    })
-                  }
 
-                  if (i === payload.Links.length - 1) {
-                    newChain.unshift(internalBlock)
-                    nextBlockHash = internalBlock.parent
-                    callback(null, newChain)
+                      if (i === payload.Links.length - 1) {
+                        newChain.unshift(internalBlock)
+                        nextBlockHash = internalBlock.parent
+                        callback(null, newChain)
+                      }
+                    })
                   }
                 }
               })
@@ -1038,7 +1045,7 @@ var blockchain = function (node) {
                     pubSub.publish('block', newBlockHash)
 
                     /* Send via socket to clients */
-                    io.emit('blockResult', chain);
+                    io.emit('blockResult', chain[chain.length - 1]);
 
                     /* Start a new round of mining */
                     if (roundBlock === null || roundBlock === undefined) {
