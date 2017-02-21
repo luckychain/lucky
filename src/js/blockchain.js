@@ -477,6 +477,7 @@ var blockchain = function (node) {
   /* Returns the first set bytes of the transaction payload given the hash */
   function ipfsGetTransactionPayload(hash) {
     return new Promise((resolve) => {
+      console.log(hash);
       ipfs.object.data(hash, { enc: "base58" }, (err, data) => {
         if (err) {
           logger("ipfsGetPayload error: ", err)
@@ -1042,7 +1043,7 @@ var blockchain = function (node) {
                     pubSub.publish('block', newBlockHash)
 
                     /* Send via socket to clients */
-                    io.emit('blockResult', block);
+                    io.emit('blockResult', chain[chain.length - 1]);
 
                     /* Start a new round of mining */
                     if (roundBlock === null || roundBlock === undefined) {
