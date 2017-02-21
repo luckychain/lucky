@@ -54,6 +54,7 @@ var blockchain = function (node) {
    *     }, {
    *       name: "transaction",
    *       hash: "<address of one transaction>",
+   *       data:
    *     }, {
    *       name: "transaction",
    *       hash: "<address of one transaction>"
@@ -758,7 +759,8 @@ var blockchain = function (node) {
  * defined to be the given blockhash.
  */
   function teeProofOfLuckMine(headerParentHash, callback) {
-    if (headerParentHash !== blockHash || (chain[0].parent !== roundBlockParent && chain[0].parent !== 'GENESIS')) {
+    if ( headerParentHash !== blockHash
+      || (chain[0].parent !== roundBlockParent && chain[0].parent !== 'GENESIS')) {
       callback("teeProofOfLuckMine error: header and parent mismatch", null)
     } else {
       var now = teeGetTrustedTime()
@@ -972,9 +974,6 @@ var blockchain = function (node) {
           seenBlockHashes.push(newBlockHash)
 
           /* Check if newChain is valid and luckier than our current chain */
-          logger(validChain(newChain))
-          logger(luck(newChain))
-          logger(luck(chain))
           if (validChain(newChain) && luck(newChain) > luck(chain)) {
             logger("pubSub: found luckier block")
 
@@ -1015,7 +1014,7 @@ var blockchain = function (node) {
                     pubSub.publish('block', newBlockHash)
 
                     /* Send via socket to clients */
-                    io.emit('chainResult', chain);
+                    io.emit('blockResult', chain);
 
                     /* Start a new round of mining */
                     if (roundBlock === null || roundBlock === undefined) {
