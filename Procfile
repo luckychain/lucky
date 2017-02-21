@@ -1,1 +1,0 @@
-web: make; node ./src/js/server.js;

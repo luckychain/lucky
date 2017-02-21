@@ -3,10 +3,7 @@
   "version": "1.0.0",
   "main": "./src/js/server.js",
   "scripts": {
-    "build-js": "browserify -dt [ babelify --presets [ es2015 react ] ] ./src/js/browser-app.js -o ./public/javascripts/bundle.js -v",
-    "build-css": "cat ./public/stylesheets/styles/*.css > ./public/stylesheets/bundle.css",
-    "build": "npm run build-js && npm run build-css",
-    "start": "nf start"
+    "start": "make; node ./src/js/server.js"
   },
   "dependencies": {
     "alt": "^0.17.8",
@@ -36,7 +33,6 @@
     "react-dom": "^0.14.2",
     "react-router": "^3.0.0",
     "react-textarea-autosize": "^4.0.5",
-    "react-tools": "^0.13.3",
     "reactify": "^1.1.1",
     "request": "^2.72.0",
     "socket.io": "^1.7.1",
