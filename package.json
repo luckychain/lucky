@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "./src/js/server.js",
   "scripts": {
-    "start": "make; node ./src/js/server.js"
+    "start": "make && node ./src/js/server.js"
   },
   "dependencies": {
     "alt": "^0.17.8",
