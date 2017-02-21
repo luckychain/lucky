@@ -2,7 +2,6 @@ import React from 'react';
 import {Link, withRouter} from 'react-router';
 import NavbarStore from '../stores/NavbarStore';
 import NavbarActions from '../actions/NavbarActions';
-import $ from 'jquery';
 
 class Navbar extends React.Component {
     constructor(props) {
@@ -13,15 +12,6 @@ class Navbar extends React.Component {
 
     componentDidMount() {
         NavbarStore.listen(this.onChange);
-        $(document).ajaxStart(() => {
-            NavbarActions.updateAjaxAnimation('fadeIn');
-        });
-
-        $(document).ajaxComplete(() => {
-            setTimeout(() => {
-                NavbarActions.updateAjaxAnimation('fadeOut');
-            }, 750);
-        });
     }
 
     componentWillUnmount() {
@@ -58,19 +48,18 @@ class Navbar extends React.Component {
                         <span className='icon-bar'></span>
                     </button>
                     <Link to='/' onClick={this.goHome.bind(this)} className='navbar-brand'>
-            <span ref='triangles' className={'triangles animated ' + this.state.ajaxAnimationClass}>
-              <div className='tri invert'></div>
-              <div className='tri invert'></div>
-              <div className='tri'></div>
-              <div className='tri invert'></div>
-              <div className='tri invert'></div>
-              <div className='tri'></div>
-              <div className='tri invert'></div>
-              <div className='tri'></div>
-              <div className='tri invert'></div>
-            </span>
+                        <span ref='triangles' className={'triangles animated ' + this.state.ajaxAnimationClass}>
+                          <div className='tri invert'></div>
+                          <div className='tri invert'></div>
+                          <div className='tri'></div>
+                          <div className='tri invert'></div>
+                          <div className='tri invert'></div>
+                          <div className='tri'></div>
+                          <div className='tri invert'></div>
+                          <div className='tri'></div>
+                          <div className='tri invert'></div>
+                        </span>
                         Luckychain
-                        
                         <span className='badge badge-up badge-danger'>{this.state.onlineUsers}</span>
                     </Link>
                 </div>

@@ -25,6 +25,7 @@ var Blockchain = React.createClass({
 
   componentDidMount: function() {
     this.getChain();
+    console.log("HELLO WORLD")
   },
 
   getChain: function() {
@@ -33,7 +34,7 @@ var Blockchain = React.createClass({
     this.socket.emit('chain');
     this.socket.on('chainResult', function (body) {
       var chain = body;
-
+      console.log(chain);
       var blocks = [];
       for (var i = 0; i < chain.length; i++) {
         var block = chain[i];

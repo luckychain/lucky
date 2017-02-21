@@ -1,5 +1,4 @@
 import alt from '../alt';
-import $ from 'jquery';
 var io = require('socket.io-client');
 
 class AppActions {

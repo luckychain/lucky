@@ -54,10 +54,11 @@ var blockchain = function (node) {
    *     }, {
    *       name: "transaction",
    *       hash: "<address of one transaction>",
-   *       data:
+   *       data: "<initial content>"
    *     }, {
    *       name: "transaction",
    *       hash: "<address of one transaction>"
+   *       data: "<initial content>"
    *     }
    *   ]
    * }
@@ -254,9 +255,9 @@ var blockchain = function (node) {
 
   /* Prints the current peers every ROUND_TIME interval by the caller. */ 
   function printInterval() {
-    console.log("[----- ROUND TIME: " + ROUND_TIME + " SECONDS -----]")
-    console.log("Current list of peers: ")
-    console.log(JSON.stringify(pubSub.getPeers(), null, 2))
+    console.log(" [----- ROUND TIME: " + ROUND_TIME + " SECONDS -----]")
+    console.log(" Current list of peers: ")
+    console.log(" " + JSON.stringify(pubSub.getPeers(), null, 2))
   }
 
   /* Prints debug relevant messages. */
@@ -473,6 +474,24 @@ var blockchain = function (node) {
     })
   }
 
+  /* Returns the first set bytes of the transaction payload given the hash */
+  function ipfsGetTransactionPayload(hash) {
+    return new Promise((resolve) => {
+      ipfs.object.data(hash, { enc: "base58" }, (err, data) => {
+        if (err) {
+          logger("ipfsGetPayload error: ", err)
+        } else {
+          data = data.toString()
+          if (validObject(data)) {
+            if (typeof data === "string") data = JSON.parse(data)
+            if (typeof data.Links === "string") data.Links = JSON.parse(data.Links)
+            resolve(data)
+          }
+        } 
+      })
+    })
+  }
+
   /* Returns a hash to the given newPayload */
   function ipfsWritePayload(newPayload) {
     return new Promise((resolve) => {
@@ -537,7 +556,10 @@ var blockchain = function (node) {
                   if (elem.name === "parent") {
                     internalBlock.parent = elem.hash
                   } else if (elem.name === "transaction" && validTransactionLink(elem)) {
-                    internalBlock.transactions.push(elem)
+                    ipfsGetTransactionPayload(elem.hash).then((txPayload) => {
+                      elem.data = txPayload
+                      internalBlock.transactions.push(elem)
+                    })
                   }
 
                   if (i === payload.Links.length - 1) {
@@ -1085,7 +1107,7 @@ var blockchain = function (node) {
     if (CRON_ON) {
       printInterval()
 
-      io.emit('peersResult', pubSub.getPeers());
+      io.emit('peersResult', pubSub.getPeers())
       
       /* Discover peers if there are currently no peer connections. */
       if (pubSub.getPeers().length === 0) ipfsPeerDiscover()
@@ -1100,16 +1122,16 @@ var blockchain = function (node) {
 /********************************** SOCKET ***********************************/
 
   io.on('connection', function (socket) {
-    console.log('Client connected');
+    console.log('Client connected')
     
     socket.on('peers', function () {
-      socket.emit('peersResult', pubSub.getPeers());
-    });
+      socket.emit('peersResult', pubSub.getPeers())
+    })
 
     socket.on('chain', function () {
-      socket.emit('chainResult', chain);
-    });
-  });
+      socket.emit('chainResult', chain)
+    })
+  })
   
 /********************************** NETWORK **********************************/
 
