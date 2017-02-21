@@ -244,7 +244,6 @@ var blockchain = function (node) {
         })
 
         resolve()
-        
       } else {
         ngrok.connect(CLIENT_PORT, function (err, address) {
           if (err) {
