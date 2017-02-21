@@ -22,6 +22,8 @@ class AppActions {
         this.socket.on('chainResult', function (body) {
             var chain = body;
 
+            console.log(chain);
+
             var blocks = [];
             for (var i = 0; i < chain.length; i++) {
                 var block = chain[i];
