@@ -33,7 +33,6 @@ class Navbar extends React.Component {
     }
 
     goHome() {
-        console.log("hi");
         this.props.goHome();
     }
 

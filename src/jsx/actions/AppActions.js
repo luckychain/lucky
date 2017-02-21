@@ -9,6 +9,8 @@ class AppActions {
             'getPeersFail',
             'getChainSuccess',
             'getChainFail',
+            'getNewBlockSuccess',
+            'getNewBlockFail',
             'goHome',
             'searchSubmit',
             'setActiveKey',
@@ -21,9 +23,6 @@ class AppActions {
         this.socket.emit('chain');
         this.socket.on('chainResult', function (body) {
             var chain = body;
-
-            console.log(chain);
-
             var blocks = [];
             for (var i = 0; i < chain.length; i++) {
                 var block = chain[i];
@@ -38,6 +37,9 @@ class AppActions {
             }
 
             that.actions.getChainSuccess(blocks);
+        });
+        this.socket.on('blockResult', function (body) {
+            that.actions.getNewBlockSuccess(body);
         });
     }
 

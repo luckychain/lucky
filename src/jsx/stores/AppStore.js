@@ -64,6 +64,17 @@ class AppStore {
             this.blocks = data;
         }
     }
+
+    onGetNewBlockSuccess(newBlock) {
+        this.blocks.unshift({
+            id: this.blocks.length,
+            attestation: newBlock.attestation,
+            hash: newBlock.hash,
+            luck: newBlock.luck,
+            parent: newBlock.parent,
+            transactions: newBlock.transactions,
+        });
+    }
 }
 
 export default alt.createStore(AppStore);

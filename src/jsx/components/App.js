@@ -31,7 +31,6 @@ class App extends React.Component {
     }
 
     goHome() {
-        console.log(this.props);
         AppActions.goHome({router:this.props.router, history:this.props.history});
     }
 

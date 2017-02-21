@@ -1076,7 +1076,7 @@ var blockchain = function (node) {
 
                     /* Send via socket to clients */
                     io.emit('blockResult', chain[chain.length - 1]);
-
+                    
                     /* Start a new round of mining */
                     if (roundBlock === null || roundBlock === undefined) {
                       newRound(newBlock, newChain, selfInvocation)

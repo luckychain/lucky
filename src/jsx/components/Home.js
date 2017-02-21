@@ -61,7 +61,7 @@ class Home extends React.Component {
                                                 <p><strong>Transactions:</strong>
                                                     {
                                                         item.transactions.map((tx) => {
-                                                            return (<span key={tx.hash}>{tx.hash}</span>);
+                                                            return (<span key={tx.hash}>{tx.hash}      {tx.data.Data}</span>);
                                                         })
                                                     }
                                                 </p>
