@@ -5,8 +5,6 @@ import HomeStore from '../stores/HomeStore';
 import HomeActions from '../actions/HomeActions';
 import Tree from './Tree'
 
-
-
 class Home extends React.Component {
 
     constructor(props) {
@@ -34,8 +32,7 @@ class Home extends React.Component {
     }
 
     handleSelect(activeKey) {
-
-        if(activeKey === this.props.activeKey) {
+        if (activeKey === this.props.activeKey) {
             this.props.router.push('/');
             this.props.setActiveKey(null);
         } else {
@@ -49,12 +46,12 @@ class Home extends React.Component {
 
         console.log(this.props);
         var blocks = this.props.blocks;
-        if (!this.state.sortDown){
+        if (!this.state.sortDown) {
             blocks = blocks.slice().reverse();
         }
         return (
             <Grid>
-                <Row className='flipInX animated'>
+                <Row>
                     <Col sm={12}>
                         <Panel header={(<span>Blockchain <Glyphicon glyph="sort" className='pull-right' style={{cursor:'pointer'}} onClick={this.flipOrder.bind(this)} />  </span>)}>
                             <PanelGroup activeKey={this.props.activeKey} onSelect={this.handleSelect.bind(this)} accordion>
