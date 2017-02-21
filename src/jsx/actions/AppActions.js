@@ -41,18 +41,9 @@ class AppActions {
             that.actions.getChainSuccess(blocks);
         });
         this.socket.on('blockResult', function (body) {
-            console.log(body);
             that.actions.getNewBlockSuccess(body);
         });
     }
-
-    /*getNewBlock() {
-        var that = this;
-        this.socket = io();
-        this.socket.on('blockResult', function (body) {
-            that.actions.getNewBlockSuccess(block);
-        });
-    }*/
 
     getPeers() {
         var that = this;
