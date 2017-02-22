@@ -19,12 +19,6 @@ class AddTransactionStore {
         this.helpBlock = errorMessage;
     }
 
-    onUpdateName(event) {
-        this.name = event.target.value;
-        this.txValidationState = '';
-        this.helpBlock = '';
-    }
-
     onEmptyTx() {
         this.txValidationState = 'has-error';
         this.helpBlock = 'Please enter a transaction.';
