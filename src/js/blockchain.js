@@ -140,7 +140,7 @@ var blockchain = function (node) {
       IPFS_ID = id.ID
       console.log("IPFS_ID: " + IPFS_ID)
 
-      initializePubSub().then(() => {
+      initializePubSub(process.env.PUBLIC_IP).then(() => {
         /* Discover IPFS peers */
         ipfsPeerDiscover()
 
@@ -214,43 +214,73 @@ var blockchain = function (node) {
     })
   }
 
-  function initializePubSub() {
+  function initializePubSub(publicIP) {
     logger("initializePubSub")
     return new Promise((resolve) => {
-      ngrok.connect(CLIENT_PORT, function (err, address) {
-        if (err) {
-          console.log(err)
-        }
-        else {
-          console.log('Publisher listening on:', address)
+      if (publicIP !== null && publicIP !== "") {
+        ngrok.connect(CLIENT_PORT, function (err, address) {
+          if (err) {
+            console.log(err)
+          }
+          else {
+            console.log('Publisher listening on:', address)
 
-          fs.writeFile(PUBGROK_DIRECTORY, address, null)
+            fs.writeFile(PUBGROK_DIRECTORY, address, null)
 
-          pubSub = new pubngrok(node, address)
-          pubSub.subscribe('block')
-          pubSub.subscribe('transaction')
+            pubSub = new pubngrok(node, address)
+            pubSub.subscribe('block')
+            pubSub.subscribe('transaction')
 
-          ipfsPeerPublish().then((path) => {
-            console.log("Successful initialization, starting...")
+            ipfsPeerPublish().then((path) => {
+              console.log("Successful initialization, starting...")
 
-            pubSub.on('block', (newBlockHash) => {
-              if (newBlockHash !== blockHash) {
-                console.log("PubSub: Received from peer a candidate block: " + newBlockHash)
-                pubSubBlock(new Buffer(newBlockHash), false)
-              }
+              pubSub.on('block', (newBlockHash) => {
+                if (newBlockHash !== blockHash) {
+                  console.log("PubSub: Received from peer a candidate block: " + newBlockHash)
+                  pubSubBlock(new Buffer(newBlockHash), false)
+                }
+              })
+
+              pubSub.on('transaction', (link) => {
+                console.log("PubSub: Received from peer a candidate transaction: " + link)
+                pubSubTransaction(new Buffer(link))
+              })
+
+              CRON_ON = true
             })
 
-            pubSub.on('transaction', (link) => {
-              console.log("PubSub: Received from peer a candidate transaction: " + link)
-              pubSubTransaction(new Buffer(link))
-            })
+            resolve()
+          }
+        })
+      } else {
+        console.log('Publisher listening on:', address)
 
-            CRON_ON = true
+        fs.writeFile(PUBGROK_DIRECTORY, address, null)
+
+        pubSub = new pubngrok(node, address)
+        pubSub.subscribe('block')
+        pubSub.subscribe('transaction')
+
+        ipfsPeerPublish().then((path) => {
+          console.log("Successful initialization, starting...")
+
+          pubSub.on('block', (newBlockHash) => {
+            if (newBlockHash !== blockHash) {
+              console.log("PubSub: Received from peer a candidate block: " + newBlockHash)
+              pubSubBlock(new Buffer(newBlockHash), false)
+            }
           })
 
-          resolve()
-        }
-      })
+          pubSub.on('transaction', (link) => {
+            console.log("PubSub: Received from peer a candidate transaction: " + link)
+            pubSubTransaction(new Buffer(link))
+          })
+
+          CRON_ON = true
+        })
+
+        resolve()
+      }
     })
   }
 
