@@ -253,11 +253,11 @@ var blockchain = function (node) {
           }
         })
       } else {
-        console.log('Publisher listening on:', address)
+        console.log('Publisher listening on:', publicIP)
 
-        fs.writeFile(PUBGROK_DIRECTORY, address, null)
+        fs.writeFile(PUBGROK_DIRECTORY, publicIP, null)
 
-        pubSub = new pubngrok(node, address)
+        pubSub = new pubngrok(node, publicIP)
         pubSub.subscribe('block')
         pubSub.subscribe('transaction')
 
