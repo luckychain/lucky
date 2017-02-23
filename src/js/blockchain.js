@@ -877,7 +877,7 @@ var blockchain = function (node) {
 
       newBlockPayload.Links.push({
         name: "parent",
-        hash: chain[0].hash
+        hash: blockHash
       })
 
       ipfsWritePayload(newBlockPayload).then((hash) => {
