@@ -6,13 +6,12 @@ class AddTransactionActions {
         this.generateActions(
             'addTransactionSuccess',
             'addTransactionFail',
-            'updateName',
             'emptyTx',
             'invalidPayload'
         );
     }
 
-    addTransaction(data) {
+    addTransaction(data, txType) {
         var baseURL = window.location.protocol + "//" + window.location.host;
 
         var addTransactionActions = this;
@@ -21,7 +20,8 @@ class AddTransactionActions {
             tx: {
                 Data: data
                 //timestamp: Date.now()
-            }
+            },
+            type: txType
         };
 
         request({

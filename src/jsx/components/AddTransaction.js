@@ -1,6 +1,6 @@
 import React from 'react';
 import Textarea from 'react-textarea-autosize';
-import {Grid, Row, Col, Panel} from 'react-bootstrap';
+import {Grid, Row, Col, Panel, FormGroup, Radio} from 'react-bootstrap';
 import AddTransactionStore from '../stores/AddTransactionStore';
 import AddTransactionActions from '../actions/AddTransactionActions';
 
@@ -45,9 +45,10 @@ class AddTransaction extends React.Component {
     }
 
     handleSubmit(event) {
-        event.preventDefault();
+        var tx = event.target.textBox.value;
+        var txType = event.target.typeOptions.value;
 
-        var tx = this.state.name;
+        event.preventDefault();
 
         if (!tx) {
             AddTransactionActions.emptyTx();
@@ -55,10 +56,9 @@ class AddTransaction extends React.Component {
         //} else if (!this.validTransactionPayload(tx)) {
         //    AddTransactionActions.invalidPayload();
         } else {
-            AddTransactionActions.addTransaction(tx);
+            AddTransactionActions.addTransaction(tx, txType);
         }
     }
-
 
 
     render() {
@@ -70,10 +70,18 @@ class AddTransaction extends React.Component {
                             <form onSubmit={this.handleSubmit.bind(this)}>
                                 <div className={'form-group ' + this.state.txValidationState}>
                                     <label className='control-label'>Transaction Name</label>
-                                    <Textarea type='text' maxRows={20} className='form-control' ref='nameTextField' value={this.state.name}
-                                           onChange={AddTransactionActions.updateName} autoFocus/>
+                                    <Textarea type='text' maxRows={20} className='form-control' name="textBox" ref='nameTextField' autoFocus/>
                                     <span className='help-block'>{this.state.helpBlock}</span>
                                 </div>
+                                <FormGroup>
+                                    <Radio inline defaultChecked name="typeOptions" value="data">
+                                        Transaction Data
+                                    </Radio>
+                                    {'   '}
+                                    <Radio inline name="typeOptions" value="address">
+                                        Transaction IPFS Address
+                                    </Radio>
+                                </FormGroup>
                                 <button type='submit' className='btn btn-primary'>Submit</button>
                             </form>
                         </Panel>

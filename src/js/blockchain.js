@@ -8,6 +8,7 @@ var pubngrok = require('pubngrok')
 var request = require('request')
 var _ = require("underscore")
 var ipfs = require("ipfs-api")
+var isIPFS = require('is-ipfs')
 
 // var SecureWorker = require('./secureworker')
 
@@ -1146,11 +1147,12 @@ var blockchain = function (node) {
 
   node.post("/tx", function(req, res, next) {
     if (req.body !== undefined || req.body !== null) {
-      var tx = req.body.tx
-      if (validTransactionPayload(tx)) {
-        console.log("/tx request received")
 
-        ipfsWritePayload(tx).then((hash) => {
+      var type = req.body.type;
+
+      if (type == "address") {
+        hash = req.body.tx.Data;
+        if (isIPFS.multihash(hash)) {
           logger('/tx payload hash: ' + hash)
 
           var txLink = {
@@ -1166,7 +1168,7 @@ var blockchain = function (node) {
           else {
             /* Publish it to peers */
             pubSub.publish('transaction', new Buffer(JSON.stringify(txLink)))
-            
+
             /* Write it locally */
             localWriteTransactionLink(txLink).then(() => {
               console.log("/tx request successful")
@@ -1177,10 +1179,50 @@ var blockchain = function (node) {
               })
             })
           }
-        })
-      } else {
-        res.status(400).json({ error: "invalid" })
+        } else {
+          res.status(400).json({ error: "invalid" })
+        }
       }
+
+      if (type == "data") {
+        var tx = req.body.tx
+
+        if (validTransactionPayload(tx)) {
+          console.log("/tx request received")
+
+          ipfsWritePayload(tx).then((hash) => {
+            logger('/tx payload hash: ' + hash)
+
+            var txLink = {
+              name: "transaction",
+              hash: hash
+            }
+
+            if (!validTransactionLink(txLink)) {
+              res.status(400).json({
+                error: "invalid"
+              })
+            }
+            else {
+              /* Publish it to peers */
+              pubSub.publish('transaction', new Buffer(JSON.stringify(txLink)))
+
+              /* Write it locally */
+              localWriteTransactionLink(txLink).then(() => {
+                console.log("/tx request successful")
+
+                res.status(200).json({
+                  message: "success",
+                  datetime: currentTimestamp()
+                })
+              })
+            }
+          })
+        } else {
+          res.status(400).json({ error: "invalid" })
+        }
+      }
+
     } else {
       res.status(400).json({ error: "invalid" })
     }
