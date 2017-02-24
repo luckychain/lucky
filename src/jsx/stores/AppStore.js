@@ -41,6 +41,35 @@ class AppStore {
             this.peers = peers;
         }*/
         this.peers = data;
+        this.peersStarData = this.createStarData([1,2,3,4,5]);
+    }
+
+    createStarData(data) {
+        var starData = {
+            "name": "You",
+            "children": []
+        }
+
+        for (var i = 0; i < data.length; i++) {
+            starData.children.push({ name: data[i], size:5000 });
+        }
+
+        return this.flatten(starData);
+    }
+
+    flatten(root) {
+        var nodes = [];
+        function recurse(node, depth) {
+            if (node.children) {
+                node.children.forEach(function(child) {
+                    recurse(child, depth + 1);
+                });
+            }
+            node.depth = depth;
+            nodes.push(node);
+        }
+        recurse(root, 1);
+        return nodes;
     }
 
     onGetChainSuccess(data) {

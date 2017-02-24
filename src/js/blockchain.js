@@ -596,8 +596,8 @@ var blockchain = function (node) {
                       callback(null, newChain)
                     }
                   } else if (elem.name === "transaction" && validTransactionLink(elem)) {
-                    ipfsGetTransactionPayload(elem.hash).then((txPayload) => {
-                      elem.data = txPayload
+                    //ipfsGetTransactionPayload(elem.hash).then((txPayload) => {
+                      //elem.data = txPayload
                       internalBlock.transactions.push(elem)
 
                       if (i === payload.Links.length - 1) {
@@ -605,7 +605,7 @@ var blockchain = function (node) {
                         nextBlockHash = internalBlock.parent
                         callback(null, newChain)
                       }
-                    })
+                    //})
                   }
                 }
               })

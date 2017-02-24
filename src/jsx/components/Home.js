@@ -61,11 +61,10 @@ class Home extends React.Component {
                                                 <p><strong>Transactions:</strong>
                                                     {
                                                         item.transactions.map((tx) => {
-                                                            return (<span key={tx.hash}>{"\n" + tx.hash}  {tx.data.Data}</span>);
+                                                            return (<span key={tx.hash}>{"\n" + tx.hash} <a href={"https://gateway.ipfs.io/api/v0/object/data/" + tx.hash}>(View Data)</a> </span>);
                                                         })
                                                     }
                                                 </p>
-
                                             </Panel>
                                         );
                                     })
