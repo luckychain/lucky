@@ -17,6 +17,12 @@ function arraysEqual(array1, array2) {
     return true
 }
 
+function log(message) {
+  if (typeof console !== 'undefined') {
+    console.log(message)
+  }
+}
+
 var timeSourceNonce = null
 
 /**
@@ -43,12 +49,12 @@ var monotonicCounterId = null
 // TODO: We should create all 256 monotonic counters and use them as one monotonic counter.
 function teeIncrementMonotonicCounter() {
   if (monotonicCounterId === null) {
-    var createdMonotonicCounter = SecureWorker.createMonotonicCounter()
+    var createdMonotonicCounter = SecureWorker.monotonicCounters.create()
     monotonicCounterId = createdMonotonicCounter.uuid
     return createdMonotonicCounter.value
   }
   else {
-    return SecureWorker.incrementMonotonicCounter(monotonicCounterId)
+    return SecureWorker.monotonicCounters.increment(monotonicCounterId)
   }
 }
 
@@ -57,7 +63,7 @@ function teeReadMonotonicCounter() {
     throw new Error("Invalid state, monotonicCounterId")
   }
 
-  return SecureWorker.readMonotonicCounter(monotonicCounterId)
+  return SecureWorker.monotonicCounters.read(monotonicCounterId)
 }
 
 /**
@@ -102,6 +108,28 @@ function f(l) {
   return (1 - l) * ROUND_TIME
 }
 
+function verifyPayload(payload) {
+  // Using == on purpose.
+  if (payload == null) {
+    return false
+  }
+
+  // TODO: Implement the rest of checks. For example, structure, lucky number limits.
+
+  return true
+}
+
+function verifyBlock(block) {
+  // Using == on purpose.
+  if (block == null) {
+    return false
+  }
+
+  // TODO: Implement the rest of checks.
+
+  return true
+}
+
 /**
  * This function is a TEE method that sets the state of roundBlockPayload
  * and roundTime. The trusted time service teeGetTrustedTime() represents
@@ -117,7 +145,7 @@ function teeProofOfLuckRound(blockPayload) {
     throw new Error("Invalid state, roundBlockPayload or roundTime")
   }
 
-  if (blockPayload === null) {
+  if (!verifyPayload(blockPayload)) {
     throw new Error("Invalid blockPayload")
   }
 
@@ -142,6 +170,18 @@ function teeProofOfLuckMine(payload, previousBlock, previousBlockPayload) {
 
   if (roundBlockPayload === null || roundTime === null) {
     throw new Error("Invalid state, roundBlockPayload or roundTime")
+  }
+
+  if (!verifyPayload(payload)) {
+    throw new Error("Invalid payload")
+  }
+
+  if (!verifyBlock(previousBlock)) {
+    throw new Error("Invalid previousBlock")
+  }
+
+  if (!verifyPayload(previousBlockPayload)) {
+    throw new Error("Invalid previousBlockPayload")
   }
 
   // The last link points to the parent block.
@@ -220,3 +260,44 @@ function teeProofOfLuckResumeFromSleep() {
 
   return callback()
 }
+
+SecureWorker.onMessage(function (message) {
+  if (!message || !message.requestId || !message.type) {
+    log("Invalid message in onMessage")
+    return
+  }
+
+  try {
+    if (message.type === 'teeProofOfLuckRound') {
+      SecureWorker.postMessage({
+        type: message.type + 'Result',
+        requestId: message.requestId,
+        result: teeProofOfLuckRound.apply(null, message.args || [])
+      })
+    }
+    else if (message.type === 'teeProofOfLuckMine') {
+      SecureWorker.postMessage({
+        type: message.type + 'Result',
+        requestId: message.requestId,
+        result: teeProofOfLuckMine.apply(null, message.args || [])
+      })
+    }
+    else if (message.type === 'teeProofOfLuckResumeFromSleep') {
+      SecureWorker.postMessage({
+        type: message.type + 'Result',
+        requestId: message.requestId,
+        result: teeProofOfLuckResumeFromSleep.apply(null, message.args || [])
+      })
+    }
+    else {
+      log("Unknown message type in onMessage: " + message.type)
+    }
+  }
+  catch (error) {
+    SecureWorker.postMessage({
+      type: message.type + 'Result',
+      requestId: message.requestId,
+      error: error
+    })
+  }
+})

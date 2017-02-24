@@ -1,11 +1,13 @@
+/**
+ * Configures the mock version of the secure worker.
+ */
+
 var crypto = require('crypto')
 var fs = require('fs')
 var path = require('path')
 var uuid = require('node-uuid')
 var Uint64LE = require('int64-buffer').Uint64LE
 var SecureWorker = require('secureworker')
-
-// Configure mock version of the secure worker.
 
 var monotonicCounters = {}
 var monotonicCountersCount = 0
