@@ -13,7 +13,7 @@ var monotonicCounters = {}
 var monotonicCountersCount = 0
 
 SecureWorker._resolveContentKey = function _resolveContentKey(contentKey) {
-  return fs.readFileSync(path.join(__dirname, contentKey), 'utf8')
+  return fs.readFileSync(path.join(__dirname, '..', '..', 'enclave', contentKey), 'utf8')
 }
 
 SecureWorker._createMonotonicCounter = function _createMonotonicCounter() {

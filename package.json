@@ -37,7 +37,8 @@
     "underscore": "^1.8.3",
     "node-uuid": "^1.4.7",
     "int64-buffer": "^0.1.9",
-    "secureworker": "git+ssh://git@github.com/sunblaze-ucb/node-secureworker.git#5964c9f7a456972b14a24fb719d87f136d026739"
+    "secureworker": "git+ssh://git@github.com/sunblaze-ucb/node-secureworker.git#b2b473824b0fedb5913441d6a385e8a4af7d39d7",
+    "ipld-dag-cbor": "^0.9.1"
   },
   "engines": {
     "node": "5.1.0"

@@ -10,6 +10,24 @@ function randomId() {
   return uuid.v4()
 }
 
+function serialize(data) {
+  // Using == on purpose.
+  if (data == null) {
+    return null
+  }
+
+  return JSON.stringify(data)
+}
+
+function deserialize(string) {
+  // Using == on purpose.
+  if (string == null) {
+    return null
+  }
+
+  return JSON.parse(string)
+}
+
 function afterSleep(callback) {
   var requestId = randomId()
 
@@ -17,7 +35,7 @@ function afterSleep(callback) {
     if (message.type !== 'teeProofOfLuckResumeFromSleepResult' || message.requestId !== requestId) return;
     secureWorker.removeOnMessage(messageHandler);
 
-    callback(message.error, message.result)
+    callback(deserialize(message.error), deserialize(message.result))
   });
 
   secureWorker.postMessage({
@@ -28,7 +46,7 @@ function afterSleep(callback) {
 }
 
 module.exports = function enclaveConstructor() {
-  var secureWorker = new SecureWorker('sgx.js')
+  var secureWorker = new SecureWorker('lucky-chain.js')
 
   return {
     teeProofOfLuckRound: function teeProofOfLuckRound(blockPayload, callback) {
@@ -38,13 +56,13 @@ module.exports = function enclaveConstructor() {
         if (message.type !== 'teeProofOfLuckRoundResult' || message.requestId !== requestId) return;
         secureWorker.removeOnMessage(messageHandler);
 
-        callback(message.error, message.result)
+        callback(deserialize(message.error), deserialize(message.result))
       });
 
       secureWorker.postMessage({
         type: 'teeProofOfLuckRound',
         requestId: requestId,
-        args: [blockPayload]
+        args: [blockPayload].map(serialize)
       })
     },
 
@@ -55,19 +73,20 @@ module.exports = function enclaveConstructor() {
         if (message.type !== 'teeProofOfLuckMineResult' || message.requestId !== requestId) return;
         secureWorker.removeOnMessage(messageHandler);
 
-        if (message.error) {
-          return callback(message.error)
+        var error = deserialize(message.error)
+        if (error) {
+          return callback(error)
         }
 
         setTimeout(function () {
           afterSleep(callback)
-        }, message.result * 1000) // message.result is in seconds.
+        }, deserialize(message.result) * 1000) // message.result is in seconds.
       });
 
       secureWorker.postMessage({
         type: 'teeProofOfLuckMine',
         requestId: requestId,
-        args: [payload, previousBlock, previousBlockPayload]
+        args: [payload, previousBlock, previousBlockPayload].map(serialize)
       })
     }
   }

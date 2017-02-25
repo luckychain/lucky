@@ -43,3 +43,4 @@ storage/pubsub.json
 storage/pubgrok
 .bash_profile
 .idea
+enclave/ipld-dag-cbor.js

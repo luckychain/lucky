@@ -1,5 +1,7 @@
 // This code runs inside an SGX enclave.
 
+SecureWorker.importScripts('ipld-dag-cbor.js')
+
 var ROUND_TIME = 10 // seconds
 
 function arraysEqual(array1, array2) {
@@ -21,6 +23,24 @@ function log(message) {
   if (typeof console !== 'undefined') {
     console.log(message)
   }
+}
+
+function serialize(data) {
+  // Using == on purpose.
+  if (data == null) {
+    return null
+  }
+
+  return JSON.stringify(data)
+}
+
+function deserialize(string) {
+  // Using == on purpose.
+  if (string == null) {
+    return null
+  }
+
+  return JSON.parse(string)
 }
 
 var timeSourceNonce = null
@@ -91,17 +111,19 @@ var roundTime = null
 var sleepCallback = null
 
 /**
- * Returns an IPFS CID of a given object, as a string.
+ * Returns an IPFS CID of a given object, as a CID object.
  */
 function ipfsAddress(object) {
-  // TODO: Implement.
-}
-
-/**
- * Returns an IPFS CID of a given object, as an ArrayBuffer.
- */
-function ipfsAddressArrayBuffer(object) {
-  // TODO: Implement.
+  return new Promise(function (resolve, reject) {
+    dagCBOR.util.cid(object, function (error, result) {
+      if (error) {
+        reject(error)
+      }
+      else {
+        resolve(result)
+      }
+    })
+  });
 }
 
 function f(l) {
@@ -163,7 +185,7 @@ function teeProofOfLuckRound(blockPayload) {
  * Sleeping is implemented with help of another function,
  * teeProofOfLuckResumeFromSleep.
  */
-function teeProofOfLuckMine(payload, previousBlock, previousBlockPayload) {
+function teeProofOfLuckMine(payload, previousBlock, previousBlockPayload, callback) {
   if (sleepCallback !== null) {
     throw new Error("Invalid state, sleepCallback")
   }
@@ -184,60 +206,68 @@ function teeProofOfLuckMine(payload, previousBlock, previousBlockPayload) {
     throw new Error("Invalid previousBlockPayload")
   }
 
-  // The last link points to the parent block.
-  var payloadParentLink = payload.Links[payload.Links.length - 1]
-  if (payloadParentLink.name !== "parent" || payloadParentLink.hash !== ipfsAddress(previousBlock)) {
-    throw new Error("payload.parent != hash(previousBlock)")
-  }
-
-  var previousBlockPayloadLink = previousBlock.Links[0]
-  if (previousBlockPayloadLink.name !== "payload" || previousBlockPayloadLink.hash !== ipfsAddress(previousBlockPayload)) {
-    throw new Error("previousBlock.payload != hash(previousBlockPayload)")
-  }
-
-  // The last link points to the parent block.
-  var roundBlockPayloadParentLink = roundBlockPayload.Links[roundBlockPayload.Links.length - 1]
-  var previousBlockPayloadParentLink = previousBlockPayload.Links[previousBlockPayload.Links.length - 1]
-  if (previousBlockPayloadParentLink.name !== "parent" || roundBlockPayloadParentLink.name !== "parent" || previousBlockPayloadParentLink.hash !== roundBlockPayloadParentLink.hash) {
-    throw new Error("previousBlockPayload.parent != roundBlockPayload.parent")
-  }
-
-  var now = teeGetTrustedTime()
-
-  if (now < roundTime + ROUND_TIME) {
-    throw new Error("now < roundTime + ROUND_TIME")
-  }
-
-  roundBlockPayload = null
-  roundTime = null
-
-  var l = teeGetRandom()
-  var payloadAddress = new Uint8Array(ipfsAddressArrayBuffer(payload))
-
-  var nonceBuffer = new ArrayBuffer(64)
-  var nonceArray = new Uint8Array(nonceBuffer)
-  var nonceView = new DataView(nonceBuffer)
-
-  // Version.
-  nonceView.setUint8(0, 1)
-  // Luck.
-  nonceView.setFloat64(1, l, true)
-  // Size of payloadAddress.
-  nonceView.setUint8(9, payloadAddress.byteLength)
-  // payloadAddress.
-  nonceArray.set(payloadAddress, 10)
-
-  sleepCallback = function () {
-    var newCounter = teeReadMonotonicCounter()
-    if (counter !== newCounter) {
-      throw new Error("counter !== newCounter")
+  ipfsAddress(previousBlock).then(function (previousBlockIpfsAddress) {
+    // The last link points to the parent block.
+    var payloadParentLink = payload.Links[payload.Links.length - 1]
+    if (payloadParentLink.name !== "parent" || payloadParentLink.hash !== previousBlockIpfsAddress.toBaseEncodedString()) {
+      throw new Error("payload.parent != hash(previousBlock)")
     }
 
-    return teeReport(nonceBuffer)
-  }
+    return ipfsAddress(previousBlockPayload)
+  }).then(function (previousBlockPayloadIpfsAddress) {
+    var previousBlockPayloadLink = previousBlock.Links[0]
+    if (previousBlockPayloadLink.name !== "payload" || previousBlockPayloadLink.hash !== previousBlockPayloadIpfsAddress.toBaseEncodedString()) {
+      throw new Error("previousBlock.payload != hash(previousBlockPayload)")
+    }
 
-  // Returns the time to sleep, in seconds.
-  return f(l)
+    // The last link points to the parent block.
+    var roundBlockPayloadParentLink = roundBlockPayload.Links[roundBlockPayload.Links.length - 1]
+    var previousBlockPayloadParentLink = previousBlockPayload.Links[previousBlockPayload.Links.length - 1]
+    if (previousBlockPayloadParentLink.name !== "parent" || roundBlockPayloadParentLink.name !== "parent" || previousBlockPayloadParentLink.hash !== roundBlockPayloadParentLink.hash) {
+      throw new Error("previousBlockPayload.parent != roundBlockPayload.parent")
+    }
+
+    var now = teeGetTrustedTime()
+
+    if (now < roundTime + ROUND_TIME) {
+      throw new Error("now < roundTime + ROUND_TIME")
+    }
+
+    roundBlockPayload = null
+    roundTime = null
+
+    return ipfsAddress(payload)
+  }).then(function (payloadIpfsAddress) {
+    var payloadAddress = new Uint8Array(payloadIpfsAddress.buffer)
+    var l = teeGetRandom()
+
+    var nonceBuffer = new ArrayBuffer(64)
+    var nonceArray = new Uint8Array(nonceBuffer)
+    var nonceView = new DataView(nonceBuffer)
+
+    // Version.
+    nonceView.setUint8(0, 1)
+    // Luck.
+    nonceView.setFloat64(1, l, true)
+    // Size of payloadAddress.
+    nonceView.setUint8(9, payloadAddress.byteLength)
+    // payloadAddress.
+    nonceArray.set(payloadAddress, 10)
+
+    sleepCallback = function () {
+      var newCounter = teeReadMonotonicCounter()
+      if (counter !== newCounter) {
+        throw new Error("counter !== newCounter")
+      }
+
+      return teeReport(nonceBuffer)
+    }
+
+    // Returns the time to sleep, in seconds.
+    callback(null, f(l))
+  }).catch(function (error) {
+    callback(error)
+  })
 }
 
 /**
@@ -272,21 +302,32 @@ SecureWorker.onMessage(function (message) {
       SecureWorker.postMessage({
         type: message.type + 'Result',
         requestId: message.requestId,
-        result: teeProofOfLuckRound.apply(null, message.args || [])
+        result: serialize(teeProofOfLuckRound.apply(null, (message.args || []).map(deserialize)))
       })
     }
     else if (message.type === 'teeProofOfLuckMine') {
-      SecureWorker.postMessage({
-        type: message.type + 'Result',
-        requestId: message.requestId,
-        result: teeProofOfLuckMine.apply(null, message.args || [])
-      })
+      teeProofOfLuckMine.apply(null, (message.args || []).map(deserialize).concat(function (error, sleepTime) {
+        if (error) {
+          SecureWorker.postMessage({
+            type: message.type + 'Result',
+            requestId: message.requestId,
+            error: serialize(error)
+          })
+        }
+        else {
+          SecureWorker.postMessage({
+            type: message.type + 'Result',
+            requestId: message.requestId,
+            result: serialize(sleepTime)
+          })
+        }
+      }))
     }
     else if (message.type === 'teeProofOfLuckResumeFromSleep') {
       SecureWorker.postMessage({
         type: message.type + 'Result',
         requestId: message.requestId,
-        result: teeProofOfLuckResumeFromSleep.apply(null, message.args || [])
+        result: serialize(teeProofOfLuckResumeFromSleep.apply(null, (message.args || []).map(deserialize)))
       })
     }
     else {
@@ -297,7 +338,7 @@ SecureWorker.onMessage(function (message) {
     SecureWorker.postMessage({
       type: message.type + 'Result',
       requestId: message.requestId,
-      error: error
+      error: serialize(error)
     })
   }
 })

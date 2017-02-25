@@ -1,13 +1,16 @@
-default: clean make-js ./public/javascripts/bundle.js css
+default: clean make-js ./public/javascripts/bundle.js ./enclave/ipld-dag-cbor.js css
 
 clean:
-	if test -d ./public/javascripts/bundle.js; then echo "Did not remove"; else rm -f ./public/javascripts/bundle.js; fi
+	rm -f ./public/javascripts/bundle.js ./enclave/ipld-dag-cbor.js
 
 make-js:
-	if test -d ./public/javascripts; then echo "public/javascripts exists"; else mkdir ./public/javascripts; fi
+	mkdir -p ./public/javascripts
 
 ./public/javascripts/bundle.js:
 	./node_modules/.bin/browserify -d -t [ babelify --presets [ es2015 react ] ] ./src/js/browser-app.js > $@
+
+./enclave/ipld-dag-cbor.js:
+	./node_modules/.bin/browserify --insert-global-vars __filename,__dirname --no-commondir -t [ babelify --presets [ es2015 ] ] ./src/js/ipld-dag-cbor.js > $@
 
 css:
 	cat ./public/stylesheets/styles/*.css > ./public/stylesheets/bundle.css
