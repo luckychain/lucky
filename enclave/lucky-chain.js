@@ -1,6 +1,6 @@
 // This code runs inside an SGX enclave.
 
-SecureWorker.importScripts('ipld-dag-cbor.js')
+SecureWorker.importScripts('ipld-dag.js')
 
 var ROUND_TIME = 10 // seconds
 
@@ -111,19 +111,28 @@ var roundTime = null
 var sleepCallback = null
 
 /**
- * Returns an IPFS CID of a given object, as a CID object.
+ * Returns an IPFS hash of a given object, returning a buffer.
  */
-function ipfsAddress(object) {
+function ipfsHashBuffer(object) {
   return new Promise(function (resolve, reject) {
-    dagCBOR.util.cid(object, function (error, result) {
+    dagPB.DAGNode.create(object.Data, object.Links, 'sha2-256', function (error, node) {
       if (error) {
         reject(error)
       }
       else {
-        resolve(result)
+        resolve(node.multihash)
       }
     })
-  });
+  })
+}
+
+/**
+ * Returns an IPFS hash of a given object, returning it encoded as a string.
+ */
+function ipfsHash(object) {
+  return ipfsHashBuffer(object).then(function (multihashBuffer) {
+    return multihashing.multihash.toB58String(multihashBuffer)
+  })
 }
 
 function f(l) {
@@ -159,6 +168,8 @@ function verifyBlock(block) {
  * verification for ROUND_TIME when mining a new block.
  */
 function teeProofOfLuckRound(blockPayload) {
+  // TODO: We should allow round to be committed in any state, resetting all other state to the new state.
+
   if (sleepCallback !== null) {
     throw new Error("Invalid state, sleepCallback")
   }
@@ -206,24 +217,24 @@ function teeProofOfLuckMine(payload, previousBlock, previousBlockPayload, callba
     throw new Error("Invalid previousBlockPayload")
   }
 
-  ipfsAddress(previousBlock).then(function (previousBlockIpfsAddress) {
+  ipfsHash(previousBlock).then(function (previousBlockIpfsHash) {
     // The last link points to the parent block.
     var payloadParentLink = payload.Links[payload.Links.length - 1]
-    if (payloadParentLink.name !== "parent" || payloadParentLink.hash !== previousBlockIpfsAddress.toBaseEncodedString()) {
+    if (payloadParentLink.Name !== "parent" || payloadParentLink.Hash !== previousBlockIpfsHash) {
       throw new Error("payload.parent != hash(previousBlock)")
     }
 
-    return ipfsAddress(previousBlockPayload)
-  }).then(function (previousBlockPayloadIpfsAddress) {
+    return ipfsHash(previousBlockPayload)
+  }).then(function (previousBlockPayloadIpfsHash) {
     var previousBlockPayloadLink = previousBlock.Links[0]
-    if (previousBlockPayloadLink.name !== "payload" || previousBlockPayloadLink.hash !== previousBlockPayloadIpfsAddress.toBaseEncodedString()) {
+    if (previousBlockPayloadLink.Name !== "payload" || previousBlockPayloadLink.Hash !== previousBlockPayloadIpfsHash) {
       throw new Error("previousBlock.payload != hash(previousBlockPayload)")
     }
 
     // The last link points to the parent block.
     var roundBlockPayloadParentLink = roundBlockPayload.Links[roundBlockPayload.Links.length - 1]
     var previousBlockPayloadParentLink = previousBlockPayload.Links[previousBlockPayload.Links.length - 1]
-    if (previousBlockPayloadParentLink.name !== "parent" || roundBlockPayloadParentLink.name !== "parent" || previousBlockPayloadParentLink.hash !== roundBlockPayloadParentLink.hash) {
+    if (previousBlockPayloadParentLink.Name !== "parent" || roundBlockPayloadParentLink.Name !== "parent" || previousBlockPayloadParentLink.Hash !== roundBlockPayloadParentLink.Hash) {
       throw new Error("previousBlockPayload.parent != roundBlockPayload.parent")
     }
 
@@ -236,9 +247,9 @@ function teeProofOfLuckMine(payload, previousBlock, previousBlockPayload, callba
     roundBlockPayload = null
     roundTime = null
 
-    return ipfsAddress(payload)
-  }).then(function (payloadIpfsAddress) {
-    var payloadAddress = new Uint8Array(payloadIpfsAddress.buffer)
+    return ipfsHashBuffer(payload)
+  }).then(function (payloadIpfsHashBuffer) {
+    var payloadHash = new Uint8Array(payloadIpfsHashBuffer)
     var l = teeGetRandom()
 
     var nonceBuffer = new ArrayBuffer(64)
@@ -249,10 +260,10 @@ function teeProofOfLuckMine(payload, previousBlock, previousBlockPayload, callba
     nonceView.setUint8(0, 1)
     // Luck.
     nonceView.setFloat64(1, l, true)
-    // Size of payloadAddress.
-    nonceView.setUint8(9, payloadAddress.byteLength)
-    // payloadAddress.
-    nonceArray.set(payloadAddress, 10)
+    // Size of payloadHash.
+    nonceView.setUint8(9, payloadHash.byteLength)
+    // payloadHash.
+    nonceArray.set(payloadHash, 10)
 
     sleepCallback = function () {
       var newCounter = teeReadMonotonicCounter()
