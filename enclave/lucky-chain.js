@@ -31,6 +31,14 @@ function serialize(data) {
     return null
   }
 
+  if (data instanceof Error) {
+    data = {
+      $type: 'error',
+      msg: '' + data,
+      stack: data.stack
+    }
+  }
+
   return JSON.stringify(data)
 }
 
@@ -40,7 +48,15 @@ function deserialize(string) {
     return null
   }
 
-  return JSON.parse(string)
+  var data = JSON.parse(string)
+
+  if (data.$type === 'error') {
+    var newData = new Error(data.msg)
+    newData.stack = data.stack
+    data = newData
+  }
+
+  return data
 }
 
 var timeSourceNonce = null
