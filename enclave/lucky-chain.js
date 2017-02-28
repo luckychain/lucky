@@ -33,9 +33,18 @@ function serialize(data) {
 
   if (data instanceof Error) {
     data = {
-      $type: 'error',
+      $type: 'Error',
       msg: '' + data,
       stack: data.stack
+    }
+  }
+  else if (data instanceof ArrayBuffer) {
+    data = {
+      $type: 'ArrayBuffer',
+      // It should be bs58.encode(new Buffer(data)), but it does not work in mock implementation,
+      // because Buffer comes from outside of vm, while ArrayBuffer from inside. But it seems
+      // converting to Uint8Array first works.
+      data: bs58.encode(new Uint8Array(data))
     }
   }
 
@@ -50,10 +59,13 @@ function deserialize(string) {
 
   var data = JSON.parse(string)
 
-  if (data.$type === 'error') {
+  if (data.$type === 'Error') {
     var newData = new Error(data.msg)
     newData.stack = data.stack
     data = newData
+  }
+  else if (data.$type === 'ArrayBuffer') {
+    data = new Uint8Array(bs58.decode(data.data)).buffer
   }
 
   return data

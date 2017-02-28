@@ -4,6 +4,7 @@
  */
 
 var uuid = require('node-uuid')
+var bs58 = require('bs58')
 var SecureWorker = require('./secureworker')
 
 function randomId() {
@@ -16,6 +17,23 @@ function serialize(data) {
     return null
   }
 
+  if (data instanceof Error) {
+    data = {
+      $type: 'Error',
+      msg: '' + data,
+      stack: data.stack
+    }
+  }
+  else if (data instanceof ArrayBuffer) {
+    data = {
+      $type: 'ArrayBuffer',
+      // It should be bs58.encode(new Buffer(data)), but it does not work in mock implementation,
+      // because Buffer comes from outside of vm, while ArrayBuffer from inside. But it seems
+      // converting to Uint8Array first works.
+      data: bs58.encode(new Uint8Array(data))
+    }
+  }
+
   return JSON.stringify(data)
 }
 
@@ -25,28 +43,39 @@ function deserialize(string) {
     return null
   }
 
-  return JSON.parse(string)
-}
+  var data = JSON.parse(string)
 
-function afterSleep(callback) {
-  var requestId = randomId()
+  if (data.$type === 'Error') {
+    var newData = new Error(data.msg)
+    newData.stack = data.stack
+    data = newData
+  }
+  else if (data.$type === 'ArrayBuffer') {
+    data = new Uint8Array(bs58.decode(data.data)).buffer
+  }
 
-  secureWorker.onMessage(function messageHandler(message) {
-    if (message.type !== 'teeProofOfLuckResumeFromSleepResult' || message.requestId !== requestId) return;
-    secureWorker.removeOnMessage(messageHandler);
-
-    callback(deserialize(message.error), deserialize(message.result))
-  });
-
-  secureWorker.postMessage({
-    type: 'teeProofOfLuckResumeFromSleep',
-    requestId: requestId,
-    args: []
-  })
+  return data
 }
 
 module.exports = function enclaveConstructor() {
   var secureWorker = new SecureWorker('lucky-chain.js')
+
+  function afterSleep(callback) {
+    var requestId = randomId()
+
+    secureWorker.onMessage(function messageHandler(message) {
+      if (message.type !== 'teeProofOfLuckResumeFromSleepResult' || message.requestId !== requestId) return;
+      secureWorker.removeOnMessage(messageHandler);
+
+      callback(deserialize(message.error), deserialize(message.result))
+    });
+
+    secureWorker.postMessage({
+      type: 'teeProofOfLuckResumeFromSleep',
+      requestId: requestId,
+      args: []
+    })
+  }
 
   return {
     teeProofOfLuckRound: function teeProofOfLuckRound(blockPayload, callback) {
