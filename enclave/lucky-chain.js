@@ -163,6 +163,30 @@ function ipfsHash(object) {
   })
 }
 
+function getIpfsLink(object, linkName) {
+  if (!object.Links || !object.Links.length) {
+    throw new Error("Link with name '" + linkName + "' missing")
+  }
+
+  var link = null
+  for (var i = 0; i < object.Links.length; i++) {
+    if (object.Links[i].Name === linkName) {
+      if (link === null) {
+        link = object.Links[i]
+      }
+      else {
+        throw new Error("Duplicate links with name '" + linkName + "'")
+      }
+    }
+  }
+
+  if (!link) {
+    throw new Error("Link with name '" + linkName + "' missing")
+  }
+
+  return link
+}
+
 function f(l) {
   return (1 - l) * ROUND_TIME
 }
@@ -246,23 +270,18 @@ function teeProofOfLuckMine(payload, previousBlock, previousBlockPayload, callba
   }
 
   ipfsHash(previousBlock).then(function (previousBlockIpfsHash) {
-    // The last link points to the parent block.
-    var payloadParentLink = payload.Links[payload.Links.length - 1]
-    if (payloadParentLink.Name !== "parent" || payloadParentLink.Hash !== previousBlockIpfsHash) {
+    if (getIpfsLink(payload, "parent").Hash !== previousBlockIpfsHash) {
       throw new Error("payload.parent != hash(previousBlock)")
     }
 
     return ipfsHash(previousBlockPayload)
   }).then(function (previousBlockPayloadIpfsHash) {
-    var previousBlockPayloadLink = previousBlock.Links[0]
-    if (previousBlockPayloadLink.Name !== "payload" || previousBlockPayloadLink.Hash !== previousBlockPayloadIpfsHash) {
+    if (getIpfsLink(previousBlock, "payload").Hash !== previousBlockPayloadIpfsHash) {
       throw new Error("previousBlock.payload != hash(previousBlockPayload)")
     }
 
     // The last link points to the parent block.
-    var roundBlockPayloadParentLink = roundBlockPayload.Links[roundBlockPayload.Links.length - 1]
-    var previousBlockPayloadParentLink = previousBlockPayload.Links[previousBlockPayload.Links.length - 1]
-    if (previousBlockPayloadParentLink.Name !== "parent" || roundBlockPayloadParentLink.Name !== "parent" || previousBlockPayloadParentLink.Hash !== roundBlockPayloadParentLink.Hash) {
+    if (getIpfsLink(previousBlockPayload, "parent").Hash !== getIpfsLink(roundBlockPayload, "parent").Hash) {
       throw new Error("previousBlockPayload.parent != roundBlockPayload.parent")
     }
 
