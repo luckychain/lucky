@@ -41,9 +41,9 @@ function serialize(data) {
   else if (data instanceof ArrayBuffer) {
     data = {
       $type: 'ArrayBuffer',
-      // It should be bs58.encode(new Buffer(data)), but it does not work in mock implementation,
-      // because Buffer comes from outside of vm, while ArrayBuffer from inside. But it seems
-      // converting to Uint8Array first works.
+      // It should be bs58.encode(new Buffer(data)), but it does not work in mock implementation
+      // in node v6.3.0 (but has been fixed at least in v6.10.0) because Buffer comes from outside
+      // of vm, while ArrayBuffer from inside. But it seems converting to Uint8Array first works.
       data: bs58.encode(new Uint8Array(data))
     }
   }

@@ -5,6 +5,7 @@
 
 var uuid = require('node-uuid')
 var bs58 = require('bs58')
+var multihashing = require('multihashing-async')
 var SecureWorker = require('./secureworker')
 
 function randomId() {
@@ -27,9 +28,9 @@ function serialize(data) {
   else if (data instanceof ArrayBuffer) {
     data = {
       $type: 'ArrayBuffer',
-      // It should be bs58.encode(new Buffer(data)), but it does not work in mock implementation,
-      // because Buffer comes from outside of vm, while ArrayBuffer from inside. But it seems
-      // converting to Uint8Array first works.
+      // It should be bs58.encode(new Buffer(data)), but it does not work in mock implementation
+      // in node v6.3.0 (but has been fixed at least in v6.10.0) because Buffer comes from outside
+      // of vm, while ArrayBuffer from inside. But it seems converting to Uint8Array first works.
       data: bs58.encode(new Uint8Array(data))
     }
   }
@@ -67,7 +68,23 @@ module.exports = function enclaveConstructor() {
       if (message.type !== 'teeProofOfLuckResumeFromSleepResult' || message.requestId !== requestId) return;
       secureWorker.removeOnMessage(messageHandler);
 
-      callback(deserialize(message.error), deserialize(message.result))
+      var error = deserialize(message.error)
+      var report = deserialize(message.result)
+
+      if (error) {
+        callback(error)
+        return
+      }
+
+      try {
+        var quote = SecureWorker.getQuote(report)
+        var attestation = SecureWorker.getRemoteAttestation(quote)
+      }
+      catch (error) {
+        callback(error)
+      }
+
+      callback(null, {quote: quote, attestation: attestation})
     });
 
     secureWorker.postMessage({
@@ -117,6 +134,24 @@ module.exports = function enclaveConstructor() {
         requestId: requestId,
         args: [payload, previousBlock, previousBlockPayload].map(serialize)
       })
+    },
+
+    teeProofOfLuckNonce: function teeProofOfLuckNonce(quote) {
+      var nonceBuffer = SecureWorker.getQuoteData(quote)
+      var nonceView = new DataView(nonceBuffer)
+
+      if (nonceView.getUint8(0) !== 1) {
+        throw new Error("Invalid nonce version: " + nonceView.getUint8(0))
+      }
+
+      var luck = nonceView.getFloat64(1, true)
+      var hashByteLength = nonceView.getUint8(9)
+      var hash = nonceBuffer.slice(10, 10 + hashByteLength)
+
+      return {
+        luck: luck,
+        hash: multihashing.multihash.toB58String(new Buffer(hash))
+      }
     }
   }
 }
