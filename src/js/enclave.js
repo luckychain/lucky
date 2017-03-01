@@ -38,7 +38,7 @@ module.exports = function enclaveConstructor() {
         callback(error)
       }
 
-      callback(null, {quote: quote, attestation: attestation})
+      callback(null, {Quote: quote, Attestation: attestation})
     });
 
     secureWorker.postMessage({

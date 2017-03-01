@@ -109,10 +109,10 @@ SecureWorker._getQuoteData = function _getQuoteData(quote) {
 }
 
 SecureWorker._getRemoteAttestation = function _getRemoteAttestation(quote) {
-  return null
+  return new ArrayBuffer(0)
 }
 
-SecureWorker._validateRemoteAttestation = function _validateRemoteAttestation(attestation) {
+SecureWorker._validateRemoteAttestation = function _validateRemoteAttestation(quote, attestation) {
   return true
 }
 

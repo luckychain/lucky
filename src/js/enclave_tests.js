@@ -1,23 +1,15 @@
 var stringify = require('json-stable-stringify')
 var dagPB = require('ipld-dag-pb')
 var Fiber = require('fibers')
-var Future = require('fibers/future')
 var enclave = require('./enclave')()
 var SecureWorker = require('./secureworker')
+var fiberUtils = require('./fiber-utils')
 
-var teeProofOfLuckRound = function () {return Future.wrap(enclave.teeProofOfLuckRound).apply(null, arguments).wait()}
-var teeProofOfLuckMine = function () {return Future.wrap(enclave.teeProofOfLuckMine).apply(null, arguments).wait()}
+var teeProofOfLuckRound = fiberUtils.wrap(enclave.teeProofOfLuckRound)
+var teeProofOfLuckMine = fiberUtils.wrap(enclave.teeProofOfLuckMine)
 var teeProofOfLuckNonce = enclave.teeProofOfLuckNonce
 
-var DAGNodeCreate = function () {return Future.wrap(dagPB.DAGNode.create).apply(null, arguments).wait()}
-
-function sleep(ms) {
-  var future = new Future()
-  setTimeout(function () {
-    future.return()
-  }, ms)
-  future.wait()
-}
+var DAGNodeCreate = fiberUtils.wrap(dagPB.DAGNode.create)
 
 // They should share a common parent.
 var PREVIOUS_BLOCK_PAYLOAD_1 = {
@@ -82,7 +74,7 @@ var NEW_PAYLOAD = {
   }]
 }
 
-new Fiber(function() {
+new Fiber(function () {
   console.log("Starting a round")
 
   teeProofOfLuckRound(PREVIOUS_BLOCK_PAYLOAD_1)
@@ -98,14 +90,14 @@ new Fiber(function() {
   if (!errorThrown) throw new Error("Error has not been thrown")
 
   console.log("Waiting 10 seconds")
-  sleep(10000)
+  fiberUtils.sleep(10000)
 
   console.log("Mining")
   var proof = teeProofOfLuckMine(NEW_PAYLOAD, PREVIOUS_BLOCK, PREVIOUS_BLOCK_PAYLOAD_2)
 
-  if (!SecureWorker.validateRemoteAttestation(proof.attestation)) throw new Error("Remote attestation is not valid")
+  if (!SecureWorker.validateRemoteAttestation(proof.Quote, proof.Attestation)) throw new Error("Remote attestation is not valid")
 
-  var nonce = teeProofOfLuckNonce(proof.quote)
+  var nonce = teeProofOfLuckNonce(proof.Quote)
 
   var node = DAGNodeCreate(NEW_PAYLOAD.Data, NEW_PAYLOAD.Links, 'sha2-256')
 
