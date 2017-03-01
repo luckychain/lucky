@@ -1,3 +1,7 @@
 self.dagPB = require('ipld-dag-pb')
 self.multihashing = require('multihashing-async')
-self.bs58 = require('bs58')
+
+var serialization = require('./serialization')
+
+self.serialize = serialization.serialize
+self.deserialize = serialization.deserialize
