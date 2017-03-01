@@ -1,6 +1,6 @@
 // This code runs inside an SGX enclave.
 
-SecureWorker.importScripts('ipld-dag.js')
+SecureWorker.importScripts('enclave-imports.js')
 
 var ROUND_TIME = 10 // seconds
 
