@@ -37,7 +37,7 @@
     "underscore": "^1.8.3",
     "node-uuid": "^1.4.7",
     "int64-buffer": "^0.1.9",
-    "secureworker": "git+ssh://git@github.com/sunblaze-ucb/node-secureworker.git#ca18ce1ba26aad756096d3c3d4302432e6d95094",
+    "secureworker": "git+ssh://git@github.com/sunblaze-ucb/node-secureworker.git#7cdbb0e967470e1e38c44d157f3f680fc88a0aca",
     "ipld-dag-pb": "^0.9.5",
     "multihashing-async": "git://github.com/multiformats/js-multihashing-async.git#154001d3c0b4e0b51a838af934b47fa09fd8417a",
     "bs58": "^4.0.0"
