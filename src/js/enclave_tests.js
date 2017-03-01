@@ -1,4 +1,4 @@
-var stringify = require('json-stable-stringify');
+var stringify = require('json-stable-stringify')
 var dagPB = require('ipld-dag-pb')
 var Fiber = require('fibers')
 var Future = require('fibers/future')
