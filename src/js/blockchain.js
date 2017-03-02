@@ -4,9 +4,12 @@ var socketIo = require('socket.io')
 var IPFS = require('ipfs-api')
 var isIPFS = require('is-ipfs')
 var bs58 = require('bs58')
+var dagPB = require('ipld-dag-pb')
 var enclave = require('./enclave')()
 var SecureWorker = require('./secureworker')
 var fiberUtils = require('./fiber-utils')
+
+var DAGNodeCreateSync = fiberUtils.wrap(dagPB.DAGNode.create)
 
 var ROUND_TIME = 10 // seconds
 var BLOCKCHAIN_ID = "lucky-chain-0.1"
@@ -29,8 +32,15 @@ class Node {
       return result
     })
 
+    var dagNode = DAGNodeCreateSync(this.object.Data, this.object.Links, 'sha2-256')
+    this._size = dagNode.serialized.length
+
     // It can be null if not specified.
     this.address = address || null
+
+    if (this.address) {
+      assert(dagNode.toJSON().multihash === this.address, "Serialized node's hash '" + dagNode.toJSON().multihash + "' does not match provided address '" + this.address)
+    }
   }
 
   getLinks(name) {
@@ -51,7 +61,7 @@ class Node {
   }
 
   getBlockSize() {
-    // TODO
+    return this._size
   }
 
   getCumulativeSize() {
@@ -208,7 +218,13 @@ class Blockchain {
 
   getPayload(address) {
     if (!this._cache.has(address)) {
-      this._cache.set(address, new Payload(this, this._getNode(address), address))
+      var node = this._getNode(address)
+      var payload = new Payload(this, node, address)
+
+      // We check again because fiber could yield in meantime.
+      if (!this._cache.has(address)) {
+        this._cache.set(address, payload)
+      }
     }
 
     var payload = this._cache.get(address)
@@ -218,7 +234,13 @@ class Blockchain {
 
   getBlock(address) {
     if (!this._cache.has(address)) {
-      this._cache.set(address, new Block(this, this._getNode(address), address))
+      var node = this._getNode(address)
+      var block = new Block(this, node, address)
+
+      // We check again because fiber could yield in meantime.
+      if (!this._cache.has(address)) {
+        this._cache.set(address, block)
+      }
     }
 
     var block = this._cache.get(address)

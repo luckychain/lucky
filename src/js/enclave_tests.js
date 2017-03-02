@@ -4,7 +4,7 @@ var enclave = require('./enclave')()
 var SecureWorker = require('./secureworker')
 var fiberUtils = require('./fiber-utils')
 
-var DAGNodeCreate = fiberUtils.wrap(dagPB.DAGNode.create)
+var DAGNodeCreateSync = fiberUtils.wrap(dagPB.DAGNode.create)
 
 // They should share a common parent.
 var PREVIOUS_BLOCK_PAYLOAD_1 = {
@@ -94,7 +94,7 @@ fiberUtils.in(function () {
 
   var nonce = enclave.teeProofOfLuckNonce(proof.Quote)
 
-  var node = DAGNodeCreate(NEW_PAYLOAD.Data, NEW_PAYLOAD.Links, 'sha2-256')
+  var node = DAGNodeCreateSync(NEW_PAYLOAD.Data, NEW_PAYLOAD.Links, 'sha2-256')
 
   if (nonce.luck < 0.0 || nonce.luck >= 1.0) throw new Error("Invalid luck: " + nonce.luck)
   if (nonce.hash !== node.toJSON().multihash) throw new Error("Invalid nonce hash: " + nonce.hash)
