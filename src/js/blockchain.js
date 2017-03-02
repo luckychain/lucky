@@ -324,7 +324,7 @@ class Blockchain {
    * Is a transaction with given hash already pending for the next block?
    */
   isPendingTransaction(hash) {
-
+    return _.indexOf(this._pendingTransactions, hash) !== -1
   }
 
   /**
