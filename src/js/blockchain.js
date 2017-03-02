@@ -502,7 +502,7 @@ class Blockchain {
     this._cache.set(newBlockAddress, newBlock)
 
     this.ipfs.pubsub.pubSync(this.getBlocksTopic(), newBlockAddress)
-    console.log("New block mined with address: " + newBlockAddress)
+    console.log("New block mined with address '" + newBlockAddress + "' and " + newBlock.getPayload().getTransactionsLinks() + " transaction(s)")
   }
 
   _startMining() {
