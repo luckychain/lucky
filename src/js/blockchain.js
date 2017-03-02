@@ -169,7 +169,7 @@ class Block extends Node {
   }
 
   getPayload() {
-    return this.blockchain.getPayload(this.object.Links[0].Hash)
+    return this.blockchain.getPayload(this.getPayloadLink().Hash)
   }
 
   getLuck() {
@@ -400,12 +400,12 @@ class Blockchain {
       return
     }
 
-    console.log(`New latest block: ${blockAddress} (parent ${block.getParentLink()}, luck ${block.getLuck()})`)
+    console.log(`New latest block: ${blockAddress} (parent ${block.getParentLink().Hash}, luck ${block.getLuck()})`)
 
     this._latestBlock = block
 
     if (this._roundBlock) {
-      if (this._latestBlock.getParentLink() !== this._roundBlock.getParentLink()) {
+      if (this._latestBlock.getParentLink().Hash !== this._roundBlock.getParentLink().Hash) {
         this._newRound(block)
       }
     }
@@ -502,7 +502,7 @@ class Blockchain {
     this._cache.set(newBlockAddress, newBlock)
 
     this.ipfs.pubsub.pubSync(this.getBlocksTopic(), newBlockAddress)
-    console.log(`New block mined: ${newBlockAddress} (parent ${newBlock.getParentLink()}, luck ${newBlock.getLuck()}, transactions ${newBlock.getPayload().getTransactionsLinks().length})`)
+    console.log(`New block mined: ${newBlockAddress} (parent ${newBlock.getParentLink().Hash}, luck ${newBlock.getLuck()}, transactions ${newBlock.getPayload().getTransactionsLinks().length})`)
   }
 
   _startMining() {
