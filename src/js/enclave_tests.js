@@ -4,10 +4,6 @@ var enclave = require('./enclave')()
 var SecureWorker = require('./secureworker')
 var fiberUtils = require('./fiber-utils')
 
-var teeProofOfLuckRound = fiberUtils.wrap(enclave.teeProofOfLuckRound)
-var teeProofOfLuckMine = fiberUtils.wrap(enclave.teeProofOfLuckMine)
-var teeProofOfLuckNonce = enclave.teeProofOfLuckNonce
-
 var DAGNodeCreate = fiberUtils.wrap(dagPB.DAGNode.create)
 
 // They should share a common parent.
@@ -76,12 +72,12 @@ var NEW_PAYLOAD = {
 fiberUtils.in(function () {
   console.log("Starting a round")
 
-  teeProofOfLuckRound(PREVIOUS_BLOCK_PAYLOAD_1)
+  enclave.teeProofOfLuckRoundSync(PREVIOUS_BLOCK_PAYLOAD_1)
 
   // It should throw an error if it is called too soon.
   var errorThrown = false
   try {
-    teeProofOfLuckMine(NEW_PAYLOAD, PREVIOUS_BLOCK, PREVIOUS_BLOCK_PAYLOAD_2)
+    enclave.teeProofOfLuckMineSync(NEW_PAYLOAD, PREVIOUS_BLOCK, PREVIOUS_BLOCK_PAYLOAD_2)
   }
   catch (error) {
     errorThrown = true
@@ -92,11 +88,11 @@ fiberUtils.in(function () {
   fiberUtils.sleep(10000)
 
   console.log("Mining")
-  var proof = teeProofOfLuckMine(NEW_PAYLOAD, PREVIOUS_BLOCK, PREVIOUS_BLOCK_PAYLOAD_2)
+  var proof = enclave.teeProofOfLuckMineSync(NEW_PAYLOAD, PREVIOUS_BLOCK, PREVIOUS_BLOCK_PAYLOAD_2)
 
   if (!SecureWorker.validateRemoteAttestation(proof.Quote, proof.Attestation)) throw new Error("Remote attestation is not valid")
 
-  var nonce = teeProofOfLuckNonce(proof.Quote)
+  var nonce = enclave.teeProofOfLuckNonce(proof.Quote)
 
   var node = DAGNodeCreate(NEW_PAYLOAD.Data, NEW_PAYLOAD.Links, 'sha2-256')
 

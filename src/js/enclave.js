@@ -7,6 +7,7 @@ var uuid = require('node-uuid')
 var multihashing = require('multihashing-async')
 var SecureWorker = require('./secureworker')
 var serialization = require('./serialization')
+var fiberUtils = require('./fiber-utils')
 
 function randomId() {
   return uuid.v4()
@@ -48,7 +49,7 @@ module.exports = function enclaveConstructor() {
     })
   }
 
-  return {
+  var api = {
     teeProofOfLuckRound: function teeProofOfLuckRound(blockPayload, callback) {
       var requestId = randomId()
 
@@ -108,4 +109,9 @@ module.exports = function enclaveConstructor() {
       }
     }
   }
+
+  api.teeProofOfLuckRoundSync = fiberUtils.wrap(api.teeProofOfLuckRound)
+  api.teeProofOfLuckMineSync = fiberUtils.wrap(api.teeProofOfLuckMine)
+
+  return api
 }

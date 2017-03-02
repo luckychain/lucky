@@ -12,7 +12,7 @@ var ROUND_TIME = 10 // seconds
 var BLOCKCHAIN_ID = "lucky-chain-0.1"
 
 class Node {
-  constructor(blockchain, object) {
+  constructor(blockchain, object, address) {
     this.blockchain = blockchain
     this.object = {
       Data: object.Data || object.data || "",
@@ -28,6 +28,9 @@ class Node {
 
       return result
     })
+
+    // It can be null if not specified.
+    this.address = address || null
   }
 
   getLinks(name) {
@@ -35,11 +38,34 @@ class Node {
       return link.Name === name
     })
   }
+
+  toJSON() {
+    // TODO: We should maybe return a deep copy of the object?
+    return this.object
+  }
+
+  getAddress() {
+    if (!this.address) throw new Error("Address not known")
+
+    return this.address
+  }
+
+  getBlockSize() {
+    // TODO
+  }
+
+  getCumulativeSize() {
+    var recursiveSize = 0
+    for (var link of this.object.Links) {
+      recursiveSize += link.Size
+    }
+    return this.getBlockSize() + recursiveSize
+  }
 }
 
 class Payload extends Node {
-  constructor(blockchain, object) {
-    super(blockchain, object)
+  constructor(blockchain, object, address) {
+    super(blockchain, object, address)
 
     if (this.object.Data !== "") {
       throw new Error("Payload should not contain data, but it does: " + this.object.Data)
@@ -88,8 +114,8 @@ class Payload extends Node {
 }
 
 class Block extends Node {
-  constructor(blockchain, object) {
-    super(blockchain, object)
+  constructor(blockchain, object, address) {
+    super(blockchain, object, address)
 
     if (this.object.Links.length !== 1 || this.object.Links[0].Name !== "payload") {
       throw new Error("Exactly one link, payload, is required")
@@ -163,6 +189,7 @@ class Blockchain {
     this.ipfs.idSync = fiberUtils.wrap(this.ipfs.id)
     this.ipfs.object.getSync = fiberUtils.wrap(this.ipfs.object.get)
     this.ipfs.object.putSync = fiberUtils.wrap(this.ipfs.object.put)
+    this.ipfs.object.statSync = fiberUtils.wrap(this.ipfs.object.stat)
     this.ipfs.pin.addSync = fiberUtils.wrap(this.ipfs.pin.add)
     this.ipfs.pin.rmSync = fiberUtils.wrap(this.ipfs.pin.rm)
     this.ipfs.pubsub.pubSync = fiberUtils.wrap(this.ipfs.pubsub.pub)
@@ -172,11 +199,16 @@ class Blockchain {
     this.peers = new Map()
 
     this._pendingTransactions = []
+    this._roundBlock = null
+    this._roundCallback = null
+    // Latest block represents currently known best chain.
+    // It can be different from round block if it shares the same parent.
+    this._latestBlock = null
   }
 
   getPayload(address) {
     if (!this._cache.has(address)) {
-      this._cache.set(address, new Payload(this, this._getNode(address)))
+      this._cache.set(address, new Payload(this, this._getNode(address), address))
     }
 
     var payload = this._cache.get(address)
@@ -186,7 +218,7 @@ class Blockchain {
 
   getBlock(address) {
     if (!this._cache.has(address)) {
-      this._cache.set(address, new Block(this, this._getNode(address)))
+      this._cache.set(address, new Block(this, this._getNode(address), address))
     }
 
     var block = this._cache.get(address)
@@ -300,7 +332,23 @@ class Blockchain {
   }
 
   _onTransaction(transactionAddress) {
+    if (this.isPendingTransaction(transactionAddress)) {
+      return
+    }
+
+    var stat = this.ipfs.object.statSync(transactionAddress)
+
+    // We check again because fiber could yield in meantime.
+    if (this.isPendingTransaction(transactionAddress)) {
+      return
+    }
+
     console.log("New pending transaction: " + transactionAddress)
+    this._pendingTransactions.push({
+      Name: "transaction",
+      Hash: transactionAddress,
+      Size: stat.BlockSize
+    })
   }
 
   _onBlock(blockAddress) {
@@ -321,10 +369,87 @@ class Blockchain {
   }
 
   /**
-   * Is a transaction with given hash already pending for the next block?
+   * Starts a new round. Discards the previous round and resets the interval
+   * for committing pending transactions.
    */
-  isPendingTransaction(hash) {
-    return _.indexOf(this._pendingTransactions, hash) !== -1
+  _newRound(roundBlock) {
+    if (this._roundCallback) {
+      clearInterval(this._roundCallback)
+      this._roundCallback = null
+    }
+    enclave.teeProofOfLuckRoundSync(roundBlock.getPayload().toJSON())
+    setInterval(fiberUtils.in(() => {
+      this._commitPendingTransactions()
+    }), ROUND_TIME * 1000) // ms
+  }
+
+  _commitPendingTransactions() {
+    var newTransactions = this._pendingTransactions
+    this._pendingTransactions = []
+
+    var newPayloadObject = {
+      Data: "",
+      Links: newTransactions
+    }
+
+    if (this._latestBlock) {
+      newPayloadObject.Links.push({
+        Name: "parent",
+        Hash: this._latestBlock.getAddress(),
+        Size: this._latestBlock.getCumulativeSize()
+      })
+    }
+
+    var newPayload = new Payload(this, newPayloadObject)
+
+    var newPayloadResponse = this.ipfs.object.putSync(newPayload.toJSON())
+    var newPayloadAddress = newPayloadResponse.toJSON().multihash
+
+    newPayload.address = newPayloadAddress
+
+    this._cache.set(newPayloadAddress, newPayloadObject)
+
+    var proof = enclave.teeProofOfLuckMineSync(newPayload.toJSON(), this._latestBlock ? this._latestBlock.toJSON() : null, this._latestBlock ? this._latestBlock.getPayload().toJSON() : null)
+    var nonce = enclave.teeProofOfLuckNonce(proof.Quote)
+
+    assert(nonce.hash === newPayloadAddress, "Nonce hash '" + nonce.hash + "' does not match payload address '" + newPayloadAddress + "'")
+
+    var newBlock = new Block(this, {
+      Data: JSON.stringify({
+        Luck: nonce.luck,
+        Proof: {
+          Quote: bs58.encode(new Buffer(proof.Quote)),
+          Attestation: bs58.encode(new Buffer(proof.Attestation))
+        }
+      }),
+      Links: [{
+        Name: "payload",
+        Hash: newPayloadAddress,
+        Size: newPayload.getCumulativeSize()
+      }]
+    })
+
+    var newBlockResponse = this.ipfs.object.putSync(newBlock.toJSON())
+    var newBlockAddress = newBlockResponse.toJSON().multihash
+
+    newBlock.address = newBlockAddress
+
+    this._cache.set(newBlockAddress, newBlock)
+
+    this.ipfs.pubsub.pubSync(this.getBlocksTopic(), newBlockAddress)
+    console.log("New block mined with address: " + newBlockAddress)
+  }
+
+  /**
+   * Is a transaction with given address already pending for the next block?
+   */
+  isPendingTransaction(address) {
+    for (var transaction of this._pendingTransactions) {
+      if (transaction.Hash === address) {
+        return true
+      }
+    }
+    return false
   }
 
   /**
