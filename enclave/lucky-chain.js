@@ -174,20 +174,11 @@ function verifyBlock(block) {
  * verification for ROUND_TIME when mining a new block.
  */
 function teeProofOfLuckRound(blockPayload) {
-  // TODO: We should allow round to be committed in any state, resetting all other state to the new state.
-
-  if (sleepCallback !== null) {
-    throw new Error("Invalid state, sleepCallback")
-  }
-
-  if (roundBlockPayload !== null || roundTime !== null) {
-    throw new Error("Invalid state, roundBlockPayload or roundTime")
-  }
-
   if (!verifyPayload(blockPayload)) {
     throw new Error("Invalid blockPayload")
   }
 
+  sleepCallback = null
   roundBlockPayload = blockPayload
   roundTime = teeGetTrustedTime()
 }
