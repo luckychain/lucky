@@ -22,14 +22,16 @@ class Node {
       Links: object.Links || object.links || []
     }
 
-    this.object.Links.map((link) => {
-      var result = {
+    if (this.object.Data instanceof Buffer) {
+      this.object.Data = this.object.Data.toString()
+    }
+
+    this.object.Links = this.object.Links.map((link) => {
+      return {
         Name: link.Name || link.name || (() => {throw new Error("Link without a name")})(),
         Hash: link.Hash || link.hash || link.multihash || (() => {throw new Error("Link without a hash")})(),
         Size: _.isFinite(link.Size) ? link.Size : _.isFinite(link.Tsize) ? link.Tsize : _.isFinite(link.size) ? link.size : (() => {throw new Error("Link without a size")})()
       }
-
-      return result
     })
 
     var dagNode = DAGNodeCreateSync(this.object.Data, this.object.Links, 'sha2-256')
