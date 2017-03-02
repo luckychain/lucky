@@ -16,12 +16,9 @@ class AddTransactionActions {
 
         var addTransactionActions = this;
 
-        let transaction = {
-            tx: {
-                Data: data
-                //timestamp: Date.now()
-            },
-            type: txType
+        var transaction = {
+          type: txType,
+          data: data
         };
 
         request({

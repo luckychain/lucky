@@ -1,6 +1,5 @@
 var stringify = require('json-stable-stringify')
 var dagPB = require('ipld-dag-pb')
-var Fiber = require('fibers')
 var enclave = require('./enclave')()
 var SecureWorker = require('./secureworker')
 var fiberUtils = require('./fiber-utils')
@@ -74,7 +73,7 @@ var NEW_PAYLOAD = {
   }]
 }
 
-new Fiber(function () {
+fiberUtils.in(function () {
   console.log("Starting a round")
 
   teeProofOfLuckRound(PREVIOUS_BLOCK_PAYLOAD_1)
@@ -105,4 +104,4 @@ new Fiber(function () {
   if (nonce.hash !== node.toJSON().multihash) throw new Error("Invalid nonce hash: " + nonce.hash)
 
   console.log("Success", proof, nonce)
-}).run()
+})()

@@ -4,7 +4,6 @@ var socketIo = require('socket.io')
 var IPFS = require('ipfs-api')
 var isIPFS = require('is-ipfs')
 var bs58 = require('bs58')
-var Fiber = require('fibers')
 var enclave = require('./enclave')()
 var SecureWorker = require('./secureworker')
 var fiberUtils = require('./fiber-utils')
@@ -225,36 +224,48 @@ class Blockchain {
     this.socketIo = socketIo(server)
 
     this.socketIo.on("connection", (socket) => {
-      console.log("Client connected")
+      console.log("HTTP client connected")
 
-      socket.on('peers', () => {
-        new Fiber(() => {
-          socket.emit('peersResult', this.getPeers())
-        }).run()
+      socket.on('peers', fiberUtils.in(() => {
+        socket.emit('peersResult', this.getPeers())
+      }))
+
+      socket.on('chain', fiberUtils.in(() => {
+        socket.emit('chainResult', this.getChain())
+      }))
+    })
+
+    this.node.get("/peers", fiberUtils.in((req, res, next) => {
+      res.status(200).json({
+        peers: this.getPeers()
       })
+    }))
 
-      socket.on('chain', () => {
-        new Fiber(() => {
-          socket.emit('chainResult', this.getChain())
-        }).run()
+    this.node.get("/chain", fiberUtils.in((req, res, next) => {
+      res.status(200).json({
+        chain: this.getChain()
       })
-    })
+    }))
 
-    this.node.get("/peers", (req, res, next) => {
-      new Fiber(() => {
-        res.status(200).json({
-          peers: this.getPeers()
-        })
-      }).run()
-    })
+    this.node.post("/tx", fiberUtils.in((req, res, next) => {
+      // TODO: Validate that it is a POST request.
 
-    this.node.get("/chain", (req, res, next) => {
-      new Fiber(() => {
-        res.status(200).json({
-          chain: this.getChain()
-        })
-      }).run()
-    })
+      if (!_.isObject(req.body) || !req.body.type || !req.body.data || !_.isString(req.body.data)) {
+        res.status(400).json({error: "invalid"})
+        return
+      }
+
+      var type = req.body.type
+      if (type === "address") {
+        this._onNewTransactionAddress(req.body.data, res)
+      }
+      else if (type === "data") {
+        this._onNewTransactionData(req.body.data, res)
+      }
+      else {
+        res.status(400).json({error: "invalid"})
+      }
+    }))
 
     this.node.get("*", (req, res, next) => {
       res.render("template")
@@ -271,27 +282,21 @@ class Blockchain {
 
   _startPubSub() {
     var transactions = this.ipfs.pubsub.subSync(this.getTransactionsTopic(), {discover: true})
-    transactions.on('data', (obj) => {
+    transactions.on('data', fiberUtils.in((obj) => {
       if (obj.data) {
-        new Fiber(() => {
-          this._onTransaction(bs58.encode(obj.data))
-        }).run()
+        this._onTransaction(bs58.encode(obj.data))
       }
-    })
+    }))
     var blocks = this.ipfs.pubsub.subSync(this.getBlocksTopic(), {discover: true})
-    transactions.on('data', (obj) => {
+    blocks.on('data', fiberUtils.in((obj) => {
       if (obj.data) {
-        new Fiber(() => {
-          this._onBlock(bs58.encode(obj.data))
-        }).run()
+        this._onBlock(bs58.encode(obj.data))
       }
-    })
+    }))
 
-    setInterval(() => {
-      new Fiber(() => {
-        this._updatePeers()
-      }).run()
-    }, this.options.peersUpdateInterval)
+    setInterval(fiberUtils.in(() => {
+      this._updatePeers()
+    }), this.options.peersUpdateInterval)
   }
 
   _onTransaction(transactionAddress) {
@@ -300,7 +305,6 @@ class Blockchain {
 
   _onBlock(blockAddress) {
     console.log("New possible block: " + blockAddress)
-
   }
 
   _updatePeers() {
@@ -315,10 +319,66 @@ class Blockchain {
       }
     }
   }
+
+  /**
+   * Is a transaction with given hash already pending for the next block?
+   */
+  isPendingTransaction(hash) {
+
+  }
+
+  /**
+   * Called when we get a new transaction request over our HTTP API with
+   * transaction address directly specified.
+   */
+  _onNewTransactionAddress(data, res) {
+    if (!isIPFS.multihash(data)) {
+      res.status(400).json({error: "invalid"})
+      return
+    }
+
+    // We do not want duplicate transactions in the same block,
+    // but we do allow duplicate transactions across blocks.
+    // This is an arbitrary design decision for this implementation.
+    if (this.isPendingTransaction(data)) {
+      res.status(400).json({error: "pending"})
+      return
+    }
+
+    try {
+      this.ipfs.pubsub.pubSync(this.getTransactionsTopic(), bs58.decode(data))
+      console.log("New transaction with address: " + data)
+    }
+    catch (error) {
+      res.status(400).json({error: "error"})
+      throw error
+    }
+    res.status(200).json({message: "success"})
+  }
+
+  /**
+   * Called when we get a new transaction request over our HTTP API with
+   * transaction payload specified.
+   */
+  _onNewTransactionData(data, res) {
+    var response
+    try {
+      response = this.ipfs.object.putSync({
+        Data: data,
+        Links: []
+      })
+    }
+    catch (error) {
+      res.status(400).json({error: "error"})
+      throw error
+    }
+
+    this._onNewTransactionAddress(response.Hash, res)
+  }
 }
 
 module.exports = function blockchain(node, options) {
-  new Fiber(() => {
+  fiberUtils.in(() => {
     new Blockchain(node, options).start()
-  }).run()
+  })()
 }
