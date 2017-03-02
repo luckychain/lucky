@@ -1,4 +1,4 @@
-# lucky-js
+# Lucky chain
 
 ## Build guide
 
@@ -30,13 +30,7 @@ $ ipfs init
 Start the IPFS daemon:
 
 ```
-$ ulimit -n 2048
-$ ipfs daemon
-```
-
-For debugging logs, set your environment variable `DEBUG=true`.
-```
-$ export DEBUG=true
+$ ipfs daemon --enable-pubsub-experiment
 ```
 
 Lastly, start the application:
@@ -45,8 +39,3 @@ $ npm start
 ```
 
 Open the web interface at [http://localhost:8000](http://localhost:8000).
-
-## Development
-
-If you wish to develop on your own blockchain, go into `storage/id` and change the blockchain id.
-This is IPFS point of reference for discovering all peers for a blockchain.
