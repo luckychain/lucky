@@ -119,7 +119,7 @@ function ipfsHash(object) {
 
 function getIpfsLink(object, linkName) {
   if (!object.Links || !object.Links.length) {
-    throw new Error("Link with name '" + linkName + "' missing")
+    return null
   }
 
   var link = null
@@ -135,7 +135,7 @@ function getIpfsLink(object, linkName) {
   }
 
   if (!link) {
-    throw new Error("Link with name '" + linkName + "' missing")
+    return null
   }
 
   return link
@@ -229,18 +229,22 @@ function teeProofOfLuckMine(payload, previousBlock, previousBlockPayload, callba
   }
 
   ipfsHash(previousBlock).then(function (previousBlockIpfsHash) {
-    if (getIpfsLink(payload, "parent").Hash !== previousBlockIpfsHash) {
+    var payloadParentLink = getIpfsLink(payload, "parent")
+    if (!payloadParentLink || payloadParentLink.Hash !== previousBlockIpfsHash) {
       throw new Error("payload.parent != hash(previousBlock)")
     }
 
     return ipfsHash(previousBlockPayload)
   }).then(function (previousBlockPayloadIpfsHash) {
-    if (getIpfsLink(previousBlock, "payload").Hash !== previousBlockPayloadIpfsHash) {
+    var previousBlockPayloadLink = getIpfsLink(previousBlock, "payload")
+    if (!previousBlockPayloadLink || previousBlockPayloadLink.Hash !== previousBlockPayloadIpfsHash) {
       throw new Error("previousBlock.payload != hash(previousBlockPayload)")
     }
 
     // The last link points to the parent block.
-    if (getIpfsLink(previousBlockPayload, "parent").Hash !== getIpfsLink(roundBlockPayload, "parent").Hash) {
+    var previousBlockPayloadParentLink = getIpfsLink(previousBlockPayload, "parent")
+    var roundBlockPayloadParentLink = getIpfsLink(roundBlockPayload, "parent")
+    if ((previousBlockPayloadParentLink !== null || roundBlockPayloadParentLink !== null) && previousBlockPayloadParentLink.Hash !== roundBlockPayloadParentLink.Hash) {
       throw new Error("previousBlockPayload.parent != roundBlockPayload.parent")
     }
 
@@ -276,10 +280,8 @@ function teeProofOfLuckMineGenesis(payload, callback) {
     throw new Error("Invalid payload")
   }
 
-  for (var i = 0; i < payload.Links.length; i++) {
-    if (payload.Links[i].Name === "parent") {
-      throw new Error("Genesis block with parent link")
-    }
+  if (getIpfsLink(payload, "parent") !== null) {
+    throw new Error("Genesis block with parent link")
   }
 
   roundBlockPayload = null

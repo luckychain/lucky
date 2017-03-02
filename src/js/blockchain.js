@@ -390,7 +390,28 @@ class Blockchain {
   }
 
   _onBlock(blockAddress) {
-    console.log("New possible block: " + blockAddress)
+    var block = this.getBlock(blockAddress)
+
+    if (!this.isValidChain(block)) {
+      return
+    }
+
+    if (this._latestBlock && this.getChainLuck(block) <= this.getChainLuck(this._latestBlock)) {
+      return
+    }
+
+    console.log("New latest block: " + blockAddress)
+
+    this._latestBlock = block
+
+    if (this._roundBlock) {
+      if (this._latestBlock.getParentLink() !== this._roundBlock.getParentLink()) {
+        this._newRound(block)
+      }
+    }
+    else {
+      this._newRound(block)
+    }
   }
 
   _updatePeers() {
@@ -451,7 +472,7 @@ class Blockchain {
 
     newPayload.address = newPayloadAddress
 
-    this._cache.set(newPayloadAddress, newPayloadObject)
+    this._cache.set(newPayloadAddress, newPayload)
 
     var proof = enclave.teeProofOfLuckMineSync(newPayload.toJSON(), this._latestBlock ? this._latestBlock.toJSON() : null, this._latestBlock ? this._latestBlock.getPayload().toJSON() : null)
     var nonce = enclave.teeProofOfLuckNonce(proof.Quote)
@@ -516,12 +537,18 @@ class Blockchain {
     this._commitPendingTransactions()
   }
 
-  isValidBlock(block) {
+  isValidChain(block) {
     // TODO: Implement.
+    return true
   }
 
   getChainLuck(block) {
-    // TODO: Implement.
+    var luck = 0
+    while (block) {
+      luck += block.getLuck()
+      block = block.getParent()
+    }
+    return luck
   }
 
   /**
