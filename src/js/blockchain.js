@@ -256,7 +256,7 @@ class Blockchain {
   }
 
   _getNode(address) {
-    ipfs.object.getSync(address).toJSON()
+    return this.ipfs.object.getSync(address).toJSON()
   }
 
   start() {
