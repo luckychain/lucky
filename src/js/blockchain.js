@@ -102,7 +102,7 @@ class Payload extends Node {
     this._transactionsLinks = this.getLinks("transaction")
 
     if (parentLinks.length) {
-      this._parentLink = parentLinks[0]
+      this._parentLink = parentLinks[0].Hash
     }
     else {
       // Genesis block.
@@ -121,7 +121,7 @@ class Payload extends Node {
   getParent() {
     var parentLink = this.getParentLink()
     if (parentLink) {
-      return this.blockchain.getBlock(parentLink.Hash)
+      return this.blockchain.getBlock(parentLink)
     }
     else {
       // Genesis block.
@@ -159,17 +159,17 @@ class Block extends Node {
     if (nonce.luck !== this.data.Luck) {
       throw new Error("Proof's luck does not match block's luck")
     }
-    if (nonce.hash !== this.getPayloadLink().Hash) {
+    if (nonce.hash !== this.getPayloadLink()) {
       throw new Error("Proof's payload does not match block's payload")
     }
   }
 
   getPayloadLink() {
-    return this.object.Links[0]
+    return this.object.Links[0].Hash
   }
 
   getPayload() {
-    return this.blockchain.getPayload(this.getPayloadLink().Hash)
+    return this.blockchain.getPayload(this.getPayloadLink())
   }
 
   getLuck() {
@@ -400,12 +400,12 @@ class Blockchain {
       return
     }
 
-    console.log(`New latest block: ${blockAddress} (parent ${block.getParentLink().Hash}, luck ${block.getLuck()})`)
+    console.log(`New latest block: ${blockAddress} (parent ${block.getParentLink()}, luck ${block.getLuck()})`)
 
     this._latestBlock = block
 
     if (this._roundBlock) {
-      if (this._latestBlock.getParentLink().Hash !== this._roundBlock.getParentLink().Hash) {
+      if (this._latestBlock.getParentLink() !== this._roundBlock.getParentLink()) {
         this._newRound(block)
       }
     }
@@ -502,7 +502,7 @@ class Blockchain {
     this._cache.set(newBlockAddress, newBlock)
 
     this.ipfs.pubsub.pubSync(this.getBlocksTopic(), newBlockAddress)
-    console.log(`New block mined: ${newBlockAddress} (parent ${newBlock.getParentLink().Hash}, luck ${newBlock.getLuck()}, transactions ${newBlock.getPayload().getTransactionsLinks().length})`)
+    console.log(`New block mined: ${newBlockAddress} (parent ${newBlock.getParentLink()}, luck ${newBlock.getLuck()}, transactions ${newBlock.getPayload().getTransactionsLinks().length})`)
   }
 
   _startMining() {
