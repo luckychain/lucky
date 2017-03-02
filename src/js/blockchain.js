@@ -402,9 +402,7 @@ class Blockchain {
       return
     }
 
-    console.log(`New latest block: ${blockAddress} (parent ${block.getParentLink()}, luck ${block.getLuck()})`)
-
-    this._latestBlock = block
+    this._newLatestBlock(block)
 
     if (this._roundBlock) {
       if (this._latestBlock.getParentLink() !== this._roundBlock.getParentLink()) {
@@ -414,6 +412,12 @@ class Blockchain {
     else {
       this._newRound(block)
     }
+  }
+
+  _newLatestBlock(block) {
+    console.log(`New latest block: ${block.getAddress()} (parent ${block.getParentLink()}, luck ${block.getLuck()})`)
+
+    this._latestBlock = block
   }
 
   _updatePeers() {
