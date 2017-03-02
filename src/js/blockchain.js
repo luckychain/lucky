@@ -438,7 +438,7 @@ class Blockchain {
     }
     enclave.teeProofOfLuckRoundSync(roundBlock.getPayload().toJSON())
     this._roundBlock = roundBlock
-    setInterval(fiberUtils.in(() => {
+    setTimeout(fiberUtils.in(() => {
       this._commitPendingTransactions()
     }), ROUND_TIME * 1000) // ms
   }
