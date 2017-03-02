@@ -69,17 +69,17 @@ class AddTransaction extends React.Component {
                         <Panel header="Add Transaction">
                             <form onSubmit={this.handleSubmit.bind(this)}>
                                 <div className={'form-group ' + this.state.txValidationState}>
-                                    <label className='control-label'>Transaction Name</label>
+                                    <label className='control-label'>Transaction</label>
                                     <Textarea type='text' maxRows={20} className='form-control' name="textBox" ref='nameTextField' autoFocus/>
                                     <span className='help-block'>{this.state.helpBlock}</span>
                                 </div>
                                 <FormGroup>
                                     <Radio inline defaultChecked name="typeOptions" value="data">
-                                        Transaction Data
+                                        Data
                                     </Radio>
                                     {'   '}
                                     <Radio inline name="typeOptions" value="address">
-                                        Transaction IPFS Address
+                                        IPFS Address
                                     </Radio>
                                 </FormGroup>
                                 <button type='submit' className='btn btn-primary'>Submit</button>

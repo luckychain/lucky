@@ -284,13 +284,13 @@ class Blockchain {
     var transactions = this.ipfs.pubsub.subSync(this.getTransactionsTopic(), {discover: true})
     transactions.on('data', fiberUtils.in((obj) => {
       if (obj.data) {
-        this._onTransaction(bs58.encode(obj.data))
+        this._onTransaction(obj.data.toString('utf8'))
       }
     }))
     var blocks = this.ipfs.pubsub.subSync(this.getBlocksTopic(), {discover: true})
     blocks.on('data', fiberUtils.in((obj) => {
       if (obj.data) {
-        this._onBlock(bs58.encode(obj.data))
+        this._onBlock(obj.data.toString('utf8'))
       }
     }))
 
@@ -346,7 +346,7 @@ class Blockchain {
     }
 
     try {
-      this.ipfs.pubsub.pubSync(this.getTransactionsTopic(), bs58.decode(data))
+      this.ipfs.pubsub.pubSync(this.getTransactionsTopic(), data)
       console.log("New transaction with address: " + data)
     }
     catch (error) {
@@ -373,7 +373,7 @@ class Blockchain {
       throw error
     }
 
-    this._onNewTransactionAddress(response.Hash, res)
+    this._onNewTransactionAddress(response.toJSON().multihash, res)
   }
 }
 
