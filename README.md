@@ -4,7 +4,7 @@
 
 This library has the following system dependencies:
 
-* [node.js](https://nodejs.org/): 
+* [node.js](https://nodejs.org/) (tested with v6.3.0): 
   * You can install it from [nodejs.org](https://nodejs.org/en/),
   * or use your system's package,
   * or [Node Version Manager](https://github.com/creationix/nvm).
