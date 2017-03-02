@@ -69,8 +69,25 @@ var NEW_PAYLOAD = {
   }]
 }
 
+var GENESIS_PAYLOAD = {
+  Data: "GENESIS",
+  Links: []
+}
+
 fiberUtils.in(function () {
-  console.log("Starting a round")
+  console.log("Mining a genesis block")
+  var proof = enclave.teeProofOfLuckMineSync(GENESIS_PAYLOAD, null, null)
+
+  if (!SecureWorker.validateRemoteAttestation(proof.Quote, proof.Attestation)) throw new Error("Remote attestation is not valid")
+
+  var nonce = enclave.teeProofOfLuckNonce(proof.Quote)
+
+  var node = DAGNodeCreateSync(GENESIS_PAYLOAD.Data, GENESIS_PAYLOAD.Links, 'sha2-256')
+
+  if (nonce.luck !== 0.0) throw new Error("Invalid luck: " + nonce.luck)
+  if (nonce.hash !== node.toJSON().multihash) throw new Error("Invalid nonce hash: " + nonce.hash)
+
+  console.log("Starting a normal round")
 
   enclave.teeProofOfLuckRoundSync(PREVIOUS_BLOCK_PAYLOAD_1)
 
@@ -87,14 +104,14 @@ fiberUtils.in(function () {
   console.log("Waiting 10 seconds")
   fiberUtils.sleep(10000)
 
-  console.log("Mining")
-  var proof = enclave.teeProofOfLuckMineSync(NEW_PAYLOAD, PREVIOUS_BLOCK, PREVIOUS_BLOCK_PAYLOAD_2)
+  console.log("Mining a block")
+  proof = enclave.teeProofOfLuckMineSync(NEW_PAYLOAD, PREVIOUS_BLOCK, PREVIOUS_BLOCK_PAYLOAD_2)
 
   if (!SecureWorker.validateRemoteAttestation(proof.Quote, proof.Attestation)) throw new Error("Remote attestation is not valid")
 
-  var nonce = enclave.teeProofOfLuckNonce(proof.Quote)
+  nonce = enclave.teeProofOfLuckNonce(proof.Quote)
 
-  var node = DAGNodeCreateSync(NEW_PAYLOAD.Data, NEW_PAYLOAD.Links, 'sha2-256')
+  node = DAGNodeCreateSync(NEW_PAYLOAD.Data, NEW_PAYLOAD.Links, 'sha2-256')
 
   if (nonce.luck < 0.0 || nonce.luck >= 1.0) throw new Error("Invalid luck: " + nonce.luck)
   if (nonce.hash !== node.toJSON().multihash) throw new Error("Invalid nonce hash: " + nonce.hash)

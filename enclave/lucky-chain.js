@@ -203,6 +203,11 @@ function teeProofOfLuckRound(blockPayload) {
  * teeProofOfLuckResumeFromSleep.
  */
 function teeProofOfLuckMine(payload, previousBlock, previousBlockPayload, callback) {
+  if (previousBlock === null && previousBlockPayload === null) {
+    teeProofOfLuckMineGenesis(payload, callback)
+    return
+  }
+
   if (sleepCallback !== null) {
     throw new Error("Invalid state, sleepCallback")
   }
@@ -253,30 +258,38 @@ function teeProofOfLuckMine(payload, previousBlock, previousBlockPayload, callba
     var payloadHash = new Uint8Array(payloadIpfsHashBuffer)
     var l = teeGetRandom()
 
-    var nonceBuffer = new ArrayBuffer(64)
-    var nonceArray = new Uint8Array(nonceBuffer)
-    var nonceView = new DataView(nonceBuffer)
+    buildNonce(payloadHash, l, callback)
+  }).catch(function (error) {
+    callback(error)
+  })
+}
 
-    // Version.
-    nonceView.setUint8(0, 1)
-    // Luck.
-    nonceView.setFloat64(1, l, true)
-    // Size of payloadHash.
-    nonceView.setUint8(9, payloadHash.byteLength)
-    // payloadHash.
-    nonceArray.set(payloadHash, 10)
+/**
+ * Mine a genesis block. Payload has no parent and luck is always 0.
+ */
+function teeProofOfLuckMineGenesis(payload, callback) {
+  if (sleepCallback !== null) {
+    throw new Error("Invalid state, sleepCallback")
+  }
 
-    sleepCallback = function () {
-      var newCounter = teeReadMonotonicCounter()
-      if (counter !== newCounter) {
-        throw new Error("counter !== newCounter")
-      }
+  if (!verifyPayload(payload)) {
+    throw new Error("Invalid payload")
+  }
 
-      return teeReport(nonceBuffer)
+  for (var i = 0; i < payload.Links.length; i++) {
+    if (payload.Links[i].Name === "parent") {
+      throw new Error("Genesis block with parent link")
     }
+  }
 
-    // Returns the time to sleep, in seconds.
-    callback(null, f(l))
+  roundBlockPayload = null
+  roundTime = null
+
+  ipfsHashBuffer(payload).then(function (payloadIpfsHashBuffer) {
+    var payloadHash = new Uint8Array(payloadIpfsHashBuffer)
+    var l = 0.0
+
+    buildNonce(payloadHash, l, callback)
   }).catch(function (error) {
     callback(error)
   })
@@ -287,7 +300,7 @@ function teeProofOfLuckMine(payload, previousBlock, previousBlockPayload, callba
  * of the enclave an then returning back in after sleeping time passed.
  */
 function teeProofOfLuckResumeFromSleep() {
-  // TODO: Verify that really sleeping time passed.
+  // TODO: Verify that really sleeping time passed. At least seconds.
 
   if (sleepCallback === null) {
     throw new Error("Invalid state, sleepCallback")
@@ -301,6 +314,33 @@ function teeProofOfLuckResumeFromSleep() {
   sleepCallback = null
 
   return callback()
+}
+
+function buildNonce(payloadHash, l, callback) {
+  var nonceBuffer = new ArrayBuffer(64)
+  var nonceArray = new Uint8Array(nonceBuffer)
+  var nonceView = new DataView(nonceBuffer)
+
+  // Version.
+  nonceView.setUint8(0, 1)
+  // Luck.
+  nonceView.setFloat64(1, l, true)
+  // Size of payloadHash.
+  nonceView.setUint8(9, payloadHash.byteLength)
+  // payloadHash.
+  nonceArray.set(payloadHash, 10)
+
+  sleepCallback = function () {
+    var newCounter = teeReadMonotonicCounter()
+    if (counter !== newCounter) {
+      throw new Error("counter !== newCounter")
+    }
+
+    return teeReport(nonceBuffer)
+  }
+
+  // Returns the time to sleep, in seconds.
+  callback(null, f(l))
 }
 
 SecureWorker.onMessage(function (message) {

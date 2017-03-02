@@ -77,13 +77,20 @@ class Payload extends Node {
   constructor(blockchain, object, address) {
     super(blockchain, object, address)
 
-    if (this.object.Data !== "") {
-      throw new Error("Payload should not contain data, but it does: " + this.object.Data)
-    }
     var parentLinks = this.getLinks("parent")
     if (parentLinks.length > 1) {
       // Genesis block has zero parent links.
       throw new Error("At most one parent link is allowed")
+    }
+    if (parentLinks.length === 0) {
+      if (this.object.Data !== "GENESIS") {
+        throw new Error("Genesis payload should contain data 'GENESIS', but it contains: " + this.object.Data)
+      }
+    }
+    else {
+      if (this.object.Data !== "") {
+        throw new Error("Payload should not contain data, but it does: " + this.object.Data)
+      }
     }
 
     for (var link of this.object.Links) {
@@ -256,6 +263,7 @@ class Blockchain {
     this._getIPFSInfo()
     this._startPubSub()
     this._startWebInterface()
+    this._startMining()
   }
 
   getPeers() {
@@ -263,7 +271,15 @@ class Blockchain {
   }
 
   getChain() {
-    // TODO: Implement.
+    var chain = []
+    var block = this._latestBlock
+    while (block) {
+      var json = block.toJSON()
+      json.Links[0].Content = block.getPayload().toJSON()
+      chain.push(json)
+      block = block.getParent()
+    }
+    return chain
   }
 
   _getIPFSInfo() {
@@ -400,6 +416,7 @@ class Blockchain {
       this._roundCallback = null
     }
     enclave.teeProofOfLuckRoundSync(roundBlock.getPayload().toJSON())
+    this._roundBlock = roundBlock
     setInterval(fiberUtils.in(() => {
       this._commitPendingTransactions()
     }), ROUND_TIME * 1000) // ms
@@ -420,6 +437,11 @@ class Blockchain {
         Hash: this._latestBlock.getAddress(),
         Size: this._latestBlock.getCumulativeSize()
       })
+    }
+    else {
+      // To make sure an object has at least some data.
+      // We cannot store an object with no data and no links.
+      newPayloadObject.Data = "GENESIS"
     }
 
     var newPayload = new Payload(this, newPayloadObject)
@@ -460,6 +482,46 @@ class Blockchain {
 
     this.ipfs.pubsub.pubSync(this.getBlocksTopic(), newBlockAddress)
     console.log("New block mined with address: " + newBlockAddress)
+  }
+
+  _startMining() {
+    // It could happen that we already received a block from peers
+    // and/or already start a new round.
+    if (this._roundCallback || this._roundBlock) {
+      return
+    }
+
+    // Maybe we loaded the latest block from somewhere, but have
+    // not yet started a new around. Let us resume mining from there.
+    if (this._latestBlock) {
+      var latestBlock = this._latestBlock
+      // Sanity check, and to populate the cache.
+      if (this.isValidBlock(latestBlock)) {
+        throw new Error("Invalid starting latest block")
+      }
+
+      // We check that nothing changed because fiber could yield in meantime.
+      if (latestBlock === this._latestBlock) {
+        this._newRound(latestBlock)
+      }
+      else {
+        // Try again.
+        this._startMining()
+      }
+
+      return
+    }
+
+    // We start a new genesis block. A genesis block does not require to start a round.
+    this._commitPendingTransactions()
+  }
+
+  isValidBlock(block) {
+    // TODO: Implement.
+  }
+
+  getChainLuck(block) {
+    // TODO: Implement.
   }
 
   /**

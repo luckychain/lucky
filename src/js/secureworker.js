@@ -109,7 +109,8 @@ SecureWorker._getQuoteData = function _getQuoteData(quote) {
 }
 
 SecureWorker._getRemoteAttestation = function _getRemoteAttestation(quote) {
-  return new ArrayBuffer(0)
+  // To convert a string to ArrayBuffer.
+  return new Uint8Array(new Buffer("mock", "utf8")).buffer
 }
 
 SecureWorker._validateRemoteAttestation = function _validateRemoteAttestation(quote, attestation) {

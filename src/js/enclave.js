@@ -37,6 +37,7 @@ module.exports = function enclaveConstructor() {
       }
       catch (error) {
         callback(error)
+        return
       }
 
       callback(null, {Quote: quote, Attestation: attestation})
