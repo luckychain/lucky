@@ -28,9 +28,8 @@ class Footer extends React.Component {
                 <Grid>
                     <Row>
                         <Col sm={5}>
-                            <h3 className='lead'><strong>Information</strong> and <strong>Copyright</strong></h3>
+                            <h3 className='lead'><strong>Information</strong></h3>
                             <p>Powered by <strong>IPFS</strong>, <strong>Socket.io</strong> and <strong>React</strong> with Flux architecture.</p>
-                            <p>© 2016 SunBlaze.</p>
                         </Col>
                         <Col sm={7}>
                             <h3 className='lead'><strong>Peers</strong> {peers.length} Connections</h3>
