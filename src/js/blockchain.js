@@ -39,7 +39,7 @@ class Node {
     this.address = address || null
 
     if (this.address) {
-      assert(dagNode.toJSON().multihash === this.address, "Serialized node's hash '" + dagNode.toJSON().multihash + "' does not match provided address '" + this.address)
+      assert(dagNode.toJSON().multihash === this.address, `Serialized node's hash '${dagNode.toJSON().multihash}' does not match provided address '${this.address}`)
     }
   }
 
@@ -84,18 +84,18 @@ class Payload extends Node {
     }
     if (parentLinks.length === 0) {
       if (this.object.Data !== "GENESIS") {
-        throw new Error("Genesis payload should contain data 'GENESIS', but it contains: " + this.object.Data)
+        throw new Error(`Genesis payload should contain data 'GENESIS', but it contains: ${this.object.Data}`)
       }
     }
     else {
       if (this.object.Data !== "") {
-        throw new Error("Payload should not contain data, but it does: " + this.object.Data)
+        throw new Error(`Payload should not contain data, but it does: ${this.object.Data}`)
       }
     }
 
     for (var link of this.object.Links) {
       if (link.Name !== "transaction" && link.Name !== "parent") {
-        throw new Error("Invalid link: " + link.Name)
+        throw new Error(`Invalid link: ${link.Name}`)
       }
     }
 
@@ -141,7 +141,7 @@ class Block extends Node {
     this.data = JSON.parse(this.object.Data)
 
     if (!_.isFinite(this.data.Luck) || this.data.Luck < 0.0 || this.data.Luck >= 1.0) {
-      throw new Error("Invalid luck: " + this.data.Luck)
+      throw new Error(`Invalid luck: ${this.data.Luck}`)
     }
     if (!_.isObject(this.data.Proof) || !this.data.Proof.Attestation || !this.data.Proof.Quote) {
       throw new Error("Invalid proof")
@@ -381,7 +381,7 @@ class Blockchain {
       return
     }
 
-    console.log("New pending transaction: " + transactionAddress)
+    console.log(`New pending transaction: ${transactionAddress}`)
     this._pendingTransactions.push({
       Name: "transaction",
       Hash: transactionAddress,
@@ -400,7 +400,7 @@ class Blockchain {
       return
     }
 
-    console.log("New latest block: " + blockAddress)
+    console.log(`New latest block: ${blockAddress} (parent ${block.getParentLink()}, luck ${block.getLuck()})`)
 
     this._latestBlock = block
 
@@ -477,7 +477,7 @@ class Blockchain {
     var proof = enclave.teeProofOfLuckMineSync(newPayload.toJSON(), this._latestBlock ? this._latestBlock.toJSON() : null, this._latestBlock ? this._latestBlock.getPayload().toJSON() : null)
     var nonce = enclave.teeProofOfLuckNonce(proof.Quote)
 
-    assert(nonce.hash === newPayloadAddress, "Nonce hash '" + nonce.hash + "' does not match payload address '" + newPayloadAddress + "'")
+    assert(nonce.hash === newPayloadAddress, `Nonce hash '${nonce.hash}' does not match payload address '${newPayloadAddress}'`)
 
     var newBlock = new Block(this, {
       Data: JSON.stringify({
@@ -502,7 +502,7 @@ class Blockchain {
     this._cache.set(newBlockAddress, newBlock)
 
     this.ipfs.pubsub.pubSync(this.getBlocksTopic(), newBlockAddress)
-    console.log("New block mined with address '" + newBlockAddress + "' and " + newBlock.getPayload().getTransactionsLinks() + " transaction(s)")
+    console.log(`New block mined: ${newBlockAddress} (parent ${newBlock.getParentLink()}, luck ${newBlock.getLuck()}, transactions ${newBlock.getPayload().getTransactionsLinks().length})`)
   }
 
   _startMining() {
@@ -583,7 +583,7 @@ class Blockchain {
 
     try {
       this.ipfs.pubsub.pubSync(this.getTransactionsTopic(), data)
-      console.log("New transaction with address: " + data)
+      console.log(`New transaction with address: ${data}`)
     }
     catch (error) {
       res.status(400).json({error: "error"})

@@ -97,7 +97,7 @@ module.exports = function enclaveConstructor() {
       var nonceView = new DataView(nonceBuffer)
 
       if (nonceView.getUint8(0) !== 1) {
-        throw new Error("Invalid nonce version: " + nonceView.getUint8(0))
+        throw new Error(`Invalid nonce version: ${nonceView.getUint8(0)}`)
       }
 
       var luck = nonceView.getFloat64(1, true)
