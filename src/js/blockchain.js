@@ -8,6 +8,7 @@ var dagPB = require('ipld-dag-pb')
 var enclave = require('./enclave')()
 var SecureWorker = require('./secureworker')
 var fiberUtils = require('./fiber-utils')
+var clone = require('clone')
 
 var DAGNodeCreateSync = fiberUtils.wrap(dagPB.DAGNode.create)
 
@@ -52,8 +53,7 @@ class Node {
   }
 
   toJSON() {
-    // TODO: We should maybe return a deep copy of the object?
-    return this.object
+    return clone(this.object)
   }
 
   getAddress() {
@@ -277,6 +277,8 @@ class Blockchain {
     var block = this._latestBlock
     while (block) {
       var json = block.toJSON()
+      json.Hash = block.address
+      json.Data = JSON.parse(json.Data)
       json.Links[0].Content = block.getPayload().toJSON()
       chain.push(json)
       block = block.getParent()
