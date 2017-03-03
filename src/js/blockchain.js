@@ -595,7 +595,7 @@ class Blockchain {
       res.status(400).json({error: "error"})
       throw error
     }
-    res.status(200).json({message: "success"})
+    res.status(200).json({message: "success", address: data})
   }
 
   /**
