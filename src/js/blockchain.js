@@ -611,6 +611,7 @@ class Blockchain {
         Data: data,
         Links: []
       })
+      this.ipfs.pin.addSync(response.toJSON().multihash, {recursive: false})
     }
     catch (error) {
       res.status(400).json({error: "error"})
