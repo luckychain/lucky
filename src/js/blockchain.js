@@ -392,6 +392,13 @@ class Blockchain {
       Hash: transactionAddress,
       Size: stat.BlockSize
     })
+
+    // TODO: Pub/sub should broadcast this transaction only now.
+    //       Currently pub/sub broadcasts every transaction fully to everyone. We want that only if a
+    //       transaction has been processed to the end here, this node broadcasts it further. Eg., it could be
+    //       that the transaction has been already known and so it has already broadcast it before, so it does not
+    //       have to do it now again.
+    //       See: https://github.com/ipfs/go-ipfs/issues/3741
   }
 
   _onBlock(blockAddress) {
@@ -415,6 +422,12 @@ class Blockchain {
     else {
       this._newRound(block)
     }
+
+    // TODO: Pub/sub should broadcast this block only now.
+    //       Currently pub/sub broadcasts every block fully to everyone. We want that only if a block has been
+    //       processed to the end here, this node broadcasts it further. Eg., it could be that the block represents
+    //       a chain which is invalid or less lucky than currently known best (latest) chain.
+    //       See: https://github.com/ipfs/go-ipfs/issues/3741
   }
 
   _newLatestBlock(block) {
