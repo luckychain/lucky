@@ -8,6 +8,7 @@ var multihashing = require('multihashing-async')
 var SecureWorker = require('./secureworker')
 var serialization = require('./serialization')
 var fiberUtils = require('./fiber-utils')
+var Future = require('fibers/future')
 
 function randomId() {
   return uuid.v4()
@@ -71,17 +72,38 @@ module.exports = function enclaveConstructor() {
     teeProofOfLuckMine: function teeProofOfLuckMine(payload, previousBlock, previousBlockPayload, callback) {
       var requestId = randomId()
 
+      var canceled = false
+      var timeout = null
+
+      var callbackCalled = false
+      var wrappedCallback = function () {
+        if (callbackCalled) {
+          return
+        }
+        callbackCalled = true
+
+        callback.apply(null, arguments)
+      }
+
       secureWorker.onMessage(function messageHandler(message) {
         if (message.type !== 'teeProofOfLuckMineResult' || message.requestId !== requestId) return;
         secureWorker.removeOnMessage(messageHandler);
 
-        var error = serialization.deserialize(message.error)
-        if (error) {
-          return callback(error)
+        if (canceled) {
+          return
         }
 
-        setTimeout(function () {
-          afterSleep(callback)
+        var error = serialization.deserialize(message.error)
+        if (error) {
+          return wrappedCallback(error)
+        }
+
+        timeout = setTimeout(function () {
+          if (canceled) {
+            return
+          }
+
+          afterSleep(wrappedCallback)
         }, serialization.deserialize(message.result) * 1000) // message.result is in seconds.
       });
 
@@ -90,6 +112,16 @@ module.exports = function enclaveConstructor() {
         requestId: requestId,
         args: [payload, previousBlock, previousBlockPayload].map(serialization.serialize)
       })
+
+      return function cancel() {
+        canceled = true
+        if (timeout) {
+          clearTimeout(timeout)
+          timeout = null
+        }
+
+        setImmediate(wrappedCallback)
+      }
     },
 
     teeProofOfLuckNonce: function teeProofOfLuckNonce(quote) {
@@ -112,7 +144,17 @@ module.exports = function enclaveConstructor() {
   }
 
   api.teeProofOfLuckRoundSync = fiberUtils.wrap(api.teeProofOfLuckRound)
-  api.teeProofOfLuckMineSync = fiberUtils.wrap(api.teeProofOfLuckMine)
+
+  // Not a traditional sync function. It returns a future and cancel function. You should wait on future,
+  // but you can also cancel waiting (and mining, especially sleeping based on your lucky number) in parallel.
+  api.teeProofOfLuckMineSync = function (payload, previousBlock, previousBlockPayload) {
+    var future = new Future()
+    var cancel = api.teeProofOfLuckMine(payload, previousBlock, previousBlockPayload, future.resolver())
+    return {
+      future: future,
+      cancel: cancel
+    }
+  }
 
   return api
 }

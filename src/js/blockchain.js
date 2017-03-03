@@ -223,6 +223,7 @@ class Blockchain {
     // Latest block represents currently known best chain.
     // It can be different from round block if it shares the same parent.
     this._latestBlock = null
+    this._cancelMining = null
   }
 
   getPayload(address) {
@@ -444,6 +445,10 @@ class Blockchain {
       clearInterval(this._roundCallback)
       this._roundCallback = null
     }
+    if (this._cancelMining) {
+      this._cancelMining()
+      this._cancelMining = null
+    }
     enclave.teeProofOfLuckRoundSync(roundBlock.getPayload().toJSON())
     this._roundBlock = roundBlock
     this._roundCallback = setTimeout(fiberUtils.in(() => {
@@ -482,7 +487,19 @@ class Blockchain {
 
     this._cache.set(newPayloadAddress, newPayload)
 
-    var proof = enclave.teeProofOfLuckMineSync(newPayload.toJSON(), this._latestBlock ? this._latestBlock.toJSON() : null, this._latestBlock ? this._latestBlock.getPayload().toJSON() : null)
+    var proof
+    var result = enclave.teeProofOfLuckMineSync(newPayload.toJSON(), this._latestBlock ? this._latestBlock.toJSON() : null, this._latestBlock ? this._latestBlock.getPayload().toJSON() : null)
+    this._cancelMining = result.cancel
+    try {
+      proof = result.future.wait()
+      // If mining was canceled.
+      if (!proof) {
+        return
+      }
+    }
+    finally {
+      this._cancelMining = null
+    }
     var nonce = enclave.teeProofOfLuckNonce(proof.Quote)
 
     assert(nonce.hash === newPayloadAddress, `Nonce hash '${nonce.hash}' does not match payload address '${newPayloadAddress}'`)
