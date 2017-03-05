@@ -231,7 +231,7 @@ class Blockchain {
     // Latest block represents currently known best chain.
     // It can be different from round block if it shares the same parent.
     this._latestBlock = null
-    this._cancelMining = null
+    this._miningResult = null
   }
 
   getPayload(address) {
@@ -469,9 +469,9 @@ class Blockchain {
         clearTimeout(this._roundCallback)
         this._roundCallback = null
       }
-      if (this._cancelMining) {
-        this._cancelMining()
-        this._cancelMining = null
+      if (this._miningResult) {
+        this._miningResult.cancel()
+        this._miningResult = null
       }
       enclave.teeProofOfLuckRoundSync(roundBlock.getPayload().toJSON())
       this._roundBlock = roundBlock
@@ -516,13 +516,13 @@ class Blockchain {
 
       this._cache.set(newPayloadAddress, newPayload)
 
-      assert(!this._cancelMining, "this._cancelMining is set")
+      assert(!this._miningResult, "this._miningResult is set")
 
       var proof
       var result = enclave.teeProofOfLuckMineSync(newPayload.toJSON(), this._latestBlock ? this._latestBlock.toJSON() : null, this._latestBlock ? this._latestBlock.getPayload().toJSON() : null)
 
-      assert(!this._cancelMining, "this._cancelMining is set")
-      this._cancelMining = result.cancel
+      assert(!this._miningResult, "this._miningResult is set")
+      this._miningResult = result
 
       try {
         proof = result.future.wait()
@@ -532,7 +532,7 @@ class Blockchain {
         }
       }
       finally {
-        this._cancelMining = null
+        this._miningResult = null
       }
 
       var nonce = enclave.teeProofOfLuckNonce(proof.Quote)
