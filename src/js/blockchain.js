@@ -262,6 +262,10 @@ class Block extends Node {
   rememberInIPNS() {
     // TODO: Implement. Store current block into IPNS.
   }
+
+  toString() {
+    return `${this.getAddress()} (parent ${this.getParentLink()}, luck ${this.getLuck()}, time ${this.getTimestamp()}, transactions ${this.getPayload().getTransactionsLinks().length})`
+  }
 }
 
 class Blockchain {
@@ -481,7 +485,7 @@ class Blockchain {
       return
     }
 
-    console.log(`New latest block: ${block.getAddress()} (parent ${block.getParentLink()}, luck ${block.getLuck()}, time ${block.getTimestamp()}, transactions ${block.getPayload().getTransactionsLinks().length})`)
+    console.log(`New latest block: ${block}`)
 
     var previousLatestBlock = this._latestBlock
     this._latestBlock = block
@@ -651,7 +655,7 @@ class Blockchain {
       this._cache.set(newBlockAddress, newBlock)
 
       this.ipfs.pubsub.pubSync(this.getBlocksTopic(), newBlockAddress)
-      console.log(`New block mined: ${newBlockAddress} (parent ${newBlock.getParentLink()}, luck ${newBlock.getLuck()}, time ${newBlock.getTimestamp()}, transactions ${newBlock.getPayload().getTransactionsLinks().length})`)
+      console.log(`New block mined: ${newBlock}`)
     })
   }
 
