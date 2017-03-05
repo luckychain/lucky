@@ -5,15 +5,27 @@ var IPFS = require('ipfs-api')
 var isIPFS = require('is-ipfs')
 var bs58 = require('bs58')
 var dagPB = require('ipld-dag-pb')
-var enclave = require('./enclave')()
-var SecureWorker = require('./secureworker')
+var enclave = require('./enclave')
 var FiberUtils = require('./fiber-utils')
 var clone = require('clone')
+
+var enclaveInstance = null
 
 var DAGNodeCreateSync = FiberUtils.wrap(dagPB.DAGNode.create)
 
 var ROUND_TIME = 10 // seconds
 var BLOCKCHAIN_ID = "lucky-chain-0.1"
+
+var DEFAULT_OPTIONS = {
+  clientPort: 8000,
+  ipfsOptions: {
+    host: "localhost",
+    port: "5001",
+    protocol: "http"
+  },
+  blockchainId: BLOCKCHAIN_ID,
+  peersUpdateInterval: 15 // s
+}
 
 class Node {
   constructor(blockchain, object, address) {
@@ -157,11 +169,11 @@ class Block extends Node {
     this.data.Proof.Quote = new Uint8Array(bs58.decode(this.data.Proof.Quote)).buffer
     this.data.Time = new Date(this.data.Time)
 
-    if (!SecureWorker.validateRemoteAttestation(this.data.Proof.Quote, this.data.Proof.Attestation)) {
+    if (!enclaveInstance.teeValidateRemoteAttestation(this.data.Proof.Quote, this.data.Proof.Attestation)) {
       throw new Error("Invalid attestation")
     }
 
-    var nonce = enclave.teeProofOfLuckNonce(this.data.Proof.Quote)
+    var nonce = enclaveInstance.teeProofOfLuckNonce(this.data.Proof.Quote)
 
     if (nonce.luck !== this.data.Luck) {
       throw new Error("Proof's luck does not match block's luck")
@@ -255,16 +267,7 @@ class Block extends Node {
 class Blockchain {
   constructor(node, options) {
     this.node = node
-    this.options = _.defaults(options || {}, {
-      clientPort: 8000,
-      ipfsOptions: {
-        host: "localhost",
-        port: "5001",
-        protocol: "http"
-      },
-      blockchainId: BLOCKCHAIN_ID,
-      peersUpdateInterval: 15 * 1000 // ms
-    })
+    this.options = _.defaults(options || {}, DEFAULT_OPTIONS)
 
     this._cache = new Map()
 
@@ -439,7 +442,7 @@ class Blockchain {
 
     setInterval(FiberUtils.in(() => {
       this._updatePeers()
-    }), this.options.peersUpdateInterval)
+    }), this.options.peersUpdateInterval * 1000) // ms
   }
 
   _onTransaction(transactionAddress) {
@@ -557,7 +560,7 @@ class Blockchain {
         this._miningResult.cancel()
         this._miningResult = null
       }
-      enclave.teeProofOfLuckRoundSync(roundBlock.getPayload().toJSON())
+      enclaveInstance.teeProofOfLuckRoundSync(roundBlock.getPayload().toJSON())
       this._roundBlock = roundBlock
       this._roundCallback = setTimeout(FiberUtils.in(() => {
         this._commitPendingTransactions()
@@ -603,7 +606,7 @@ class Blockchain {
       assert(!this._miningResult, "this._miningResult is set")
 
       var proof
-      var result = enclave.teeProofOfLuckMineSync(newPayload.toJSON(), this._latestBlock ? this._latestBlock.toJSON() : null, this._latestBlock ? this._latestBlock.getPayload().toJSON() : null)
+      var result = enclaveInstance.teeProofOfLuckMineSync(newPayload.toJSON(), this._latestBlock ? this._latestBlock.toJSON() : null, this._latestBlock ? this._latestBlock.getPayload().toJSON() : null)
 
       assert(!this._miningResult, "this._miningResult is set")
       this._miningResult = result
@@ -619,7 +622,7 @@ class Blockchain {
         this._miningResult = null
       }
 
-      var nonce = enclave.teeProofOfLuckNonce(proof.Quote)
+      var nonce = enclaveInstance.teeProofOfLuckNonce(proof.Quote)
 
       assert(nonce.hash === newPayloadAddress, `Nonce hash '${nonce.hash}' does not match payload address '${newPayloadAddress}'`)
 
@@ -739,6 +742,12 @@ class Blockchain {
 
 module.exports = function blockchain(node, options) {
   FiberUtils.ensure(() => {
+    if (!enclaveInstance) {
+      enclaveInstance = enclave()
+    }
+
     new Blockchain(node, options).start()
   })
 }
+
+module.exports.DEFAULT_OPTIONS = DEFAULT_OPTIONS

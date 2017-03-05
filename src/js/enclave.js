@@ -5,7 +5,6 @@
 
 var uuid = require('node-uuid')
 var multihashing = require('multihashing-async')
-var SecureWorker = require('./secureworker')
 var serialization = require('./serialization')
 var FiberUtils = require('./fiber-utils')
 var Future = require('fibers/future')
@@ -15,6 +14,10 @@ function randomId() {
 }
 
 module.exports = function enclaveConstructor() {
+  // We do not want to load this module during import so that other code has time to
+  // potentially prepare the environment and configure necessary things.
+  var SecureWorker = require('./secureworker')
+
   var secureWorker = new SecureWorker('lucky-chain.js')
 
   function afterSleep(callback) {
@@ -153,6 +156,10 @@ module.exports = function enclaveConstructor() {
         luck: luck,
         hash: multihashing.multihash.toB58String(new Buffer(hash))
       }
+    },
+
+    teeValidateRemoteAttestation: function (quote, attestation) {
+      return SecureWorker.validateRemoteAttestation(quote, attestation)
     }
   }
 

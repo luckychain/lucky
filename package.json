@@ -36,7 +36,8 @@
     "bs58": "^4.0.0",
     "fibers": "^1.0.15",
     "clone": "^2.1.0",
-    "fiber-utils": "^0.7.3"
+    "fiber-utils": "^0.7.3",
+    "yargs": "^7.0.1"
   },
   "engines": {
     "node": "5.1.0"
