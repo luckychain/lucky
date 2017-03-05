@@ -121,6 +121,7 @@ FiberUtils.in(function () {
 
   if (nonce.luck < 0.0 || nonce.luck >= 1.0) throw new Error("Invalid luck: " + nonce.luck)
   if (nonce.hash !== node.toJSON().multihash) throw new Error("Invalid nonce hash: " + nonce.hash)
+  if (nonce.luck !== result.luck) throw new Error("Luck does not match: " + nonce.luck + " vs. " + result.luck)
 
   console.log("Success", proof, nonce)
 })()

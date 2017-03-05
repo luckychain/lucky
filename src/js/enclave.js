@@ -74,6 +74,7 @@ module.exports = function enclaveConstructor() {
 
       var canceled = false
       var timeout = null
+      var globalResult = {}
 
       var callbackCalled = false
       var wrappedCallback = function () {
@@ -81,6 +82,9 @@ module.exports = function enclaveConstructor() {
           return
         }
         callbackCalled = true
+
+        // To not leak memory.
+        delete globalResult.future
 
         callback.apply(null, arguments)
       }
@@ -98,13 +102,17 @@ module.exports = function enclaveConstructor() {
           return wrappedCallback(error)
         }
 
+        var result =  serialization.deserialize(message.result)
+
+        globalResult.luck = result.luck
+
         timeout = setTimeout(function () {
           if (canceled) {
             return
           }
 
           afterSleep(wrappedCallback)
-        }, serialization.deserialize(message.result) * 1000) // message.result is in seconds.
+        }, result.sleepTime * 1000) // message.result is in seconds.
       });
 
       secureWorker.postMessage({
@@ -113,15 +121,20 @@ module.exports = function enclaveConstructor() {
         args: [payload, previousBlock, previousBlockPayload].map(serialization.serialize)
       })
 
-      return function cancel() {
+      globalResult.cancel = function cancel() {
         canceled = true
         if (timeout) {
           clearTimeout(timeout)
           timeout = null
         }
 
+        // To not leak memory.
+        delete globalResult.future
+
         setImmediate(wrappedCallback)
       }
+
+      return globalResult
     },
 
     teeProofOfLuckNonce: function teeProofOfLuckNonce(quote) {
@@ -149,11 +162,10 @@ module.exports = function enclaveConstructor() {
   // but you can also cancel waiting (and mining, especially sleeping based on your lucky number) in parallel.
   api.teeProofOfLuckMineSync = function (payload, previousBlock, previousBlockPayload) {
     var future = new Future()
-    var cancel = api.teeProofOfLuckMine(payload, previousBlock, previousBlockPayload, future.resolver())
-    return {
-      future: future,
-      cancel: cancel
-    }
+    var globalResult = api.teeProofOfLuckMine(payload, previousBlock, previousBlockPayload, future.resolver())
+    globalResult.future = future
+
+    return globalResult
   }
 
   return api

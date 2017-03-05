@@ -333,7 +333,7 @@ function buildNonce(payloadHash, l, callback) {
   }
 
   // Returns the time to sleep, in seconds.
-  callback(null, f(l))
+  callback(null, f(l), l)
 }
 
 SecureWorker.onMessage(function (message) {
@@ -351,7 +351,7 @@ SecureWorker.onMessage(function (message) {
       })
     }
     else if (message.type === 'teeProofOfLuckMine') {
-      teeProofOfLuckMine.apply(null, (message.args || []).map(deserialize).concat(function (error, sleepTime) {
+      teeProofOfLuckMine.apply(null, (message.args || []).map(deserialize).concat(function (error, sleepTime, luck) {
         if (error) {
           SecureWorker.postMessage({
             type: message.type + 'Result',
@@ -363,7 +363,10 @@ SecureWorker.onMessage(function (message) {
           SecureWorker.postMessage({
             type: message.type + 'Result',
             requestId: message.requestId,
-            result: serialize(sleepTime)
+            result: serialize({
+              sleepTime: sleepTime,
+              luck: luck
+            })
           })
         }
       }))
