@@ -481,7 +481,7 @@ class Blockchain {
       return
     }
 
-    console.log(`New latest block: ${block.getAddress()} (parent ${block.getParentLink()}, luck ${block.getLuck()}, time ${block.getTimestamp()})`)
+    console.log(`New latest block: ${block.getAddress()} (parent ${block.getParentLink()}, luck ${block.getLuck()}, time ${block.getTimestamp()}, transactions ${block.getPayload().getTransactionsLinks().length})`)
 
     var previousLatestBlock = this._latestBlock
     this._latestBlock = block
