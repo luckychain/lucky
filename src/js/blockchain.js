@@ -171,7 +171,8 @@ class Block extends Node {
     }
 
     // Creating payload and parent objects validates them as well.
-    // This happens recursively over the whole chain.
+    // This happens recursively over the whole chain. Because objects are cached we do not
+    // have to necessary recompute and validate the whole chain again and again.
     this.getPayload()
     this.getParent()
 
