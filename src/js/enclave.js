@@ -115,7 +115,7 @@ module.exports = function enclaveConstructor() {
           }
 
           afterSleep(wrappedCallback)
-        }, result.sleepTime * 1000) // message.result is in seconds.
+        }, result.sleepTime * 1000) // result.sleepTime is in seconds.
       });
 
       secureWorker.postMessage({
