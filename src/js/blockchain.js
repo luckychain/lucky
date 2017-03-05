@@ -170,9 +170,10 @@ class Block extends Node {
       throw new Error("Proof's payload does not match block's payload")
     }
 
-    if (!this._isValidChain()) {
-      throw new Error("Block with an invalid chain: " + this.address)
-    }
+    // Creating payload and parent objects validates them as well.
+    // This happens recursively over the whole chain.
+    this.getPayload()
+    this.getParent()
 
     this.chainLuck = this._computeChainLuck()
   }
@@ -199,11 +200,6 @@ class Block extends Node {
 
   getParent() {
     return this.getPayload().getParent()
-  }
-
-  _isValidChain() {
-    // TODO: Implement.
-    return true
   }
 
   _computeChainLuck() {
