@@ -219,8 +219,31 @@ class Block extends Node {
     return this.chainLuck
   }
 
-  pinChain() {
-    // TODO: Implement.
+  pinChain(previousLatestBlock) {
+    FiberUtils.synchronize(this.blockchain, 'pinChain', () => {
+      var previousChainIDs = []
+      while (previousLatestBlock) {
+        previousChainIDs.push(previousLatestBlock.address)
+        previousChainIDs.push(previousLatestBlock.getPayloadLink())
+        previousLatestBlock = previousLatestBlock.getParent()
+      }
+
+      var newChainIDs = []
+      var block = this
+      while (block) {
+        newChainIDs.push(block.address)
+        newChainIDs.push(block.getPayloadLink())
+        block = block.getParent()
+      }
+
+      for (var address of _.difference(newChainIDs, previousChainIDs)) {
+        this.blockchain.ipfs.pin.addSync(address, {recursive: false})
+      }
+
+      for (var address of _.difference(previousChainIDs, newChainIDs)) {
+        this.blockchain.ipfs.pin.rmSync(address, {recursive: false})
+      }
+    })
   }
 
   // Records in IPNS are stored signed with our key, so they cannot be faked, but they could
@@ -460,6 +483,7 @@ class Blockchain {
 
     console.log(`New latest block: ${block.getAddress()} (parent ${block.getParentLink()}, luck ${block.getLuck()}, time ${block.getTimestamp()})`)
 
+    var previousLatestBlock = this._latestBlock
     this._latestBlock = block
 
     if (this._roundBlock) {
@@ -482,7 +506,7 @@ class Blockchain {
     //       a chain which is invalid or less lucky than currently known best (latest) chain.
     //       See: https://github.com/ipfs/go-ipfs/issues/3741
 
-   this._latestBlock.pinChain()
+   this._latestBlock.pinChain(previousLatestBlock)
 
     // We could yield, so we compare.
     if (this._latestBlock !== block) {
