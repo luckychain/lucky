@@ -512,7 +512,10 @@ class Blockchain {
 
       var proof
       var result = enclave.teeProofOfLuckMineSync(newPayload.toJSON(), this._latestBlock ? this._latestBlock.toJSON() : null, this._latestBlock ? this._latestBlock.getPayload().toJSON() : null)
+
+      assert(!this._cancelMining, "this._cancelMining is set")
       this._cancelMining = result.cancel
+
       try {
         proof = result.future.wait()
         // If mining was canceled.
@@ -523,6 +526,7 @@ class Blockchain {
       finally {
         this._cancelMining = null
       }
+
       var nonce = enclave.teeProofOfLuckNonce(proof.Quote)
 
       assert(nonce.hash === newPayloadAddress, `Nonce hash '${nonce.hash}' does not match payload address '${newPayloadAddress}'`)
