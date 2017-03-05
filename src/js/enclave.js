@@ -7,7 +7,7 @@ var uuid = require('node-uuid')
 var multihashing = require('multihashing-async')
 var SecureWorker = require('./secureworker')
 var serialization = require('./serialization')
-var fiberUtils = require('./fiber-utils')
+var FiberUtils = require('./fiber-utils')
 var Future = require('fibers/future')
 
 function randomId() {
@@ -143,7 +143,7 @@ module.exports = function enclaveConstructor() {
     }
   }
 
-  api.teeProofOfLuckRoundSync = fiberUtils.wrap(api.teeProofOfLuckRound)
+  api.teeProofOfLuckRoundSync = FiberUtils.wrap(api.teeProofOfLuckRound)
 
   // Not a traditional sync function. It returns a future and cancel function. You should wait on future,
   // but you can also cancel waiting (and mining, especially sleeping based on your lucky number) in parallel.

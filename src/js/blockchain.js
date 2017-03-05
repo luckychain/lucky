@@ -7,10 +7,10 @@ var bs58 = require('bs58')
 var dagPB = require('ipld-dag-pb')
 var enclave = require('./enclave')()
 var SecureWorker = require('./secureworker')
-var fiberUtils = require('./fiber-utils')
+var FiberUtils = require('./fiber-utils')
 var clone = require('clone')
 
-var DAGNodeCreateSync = fiberUtils.wrap(dagPB.DAGNode.create)
+var DAGNodeCreateSync = FiberUtils.wrap(dagPB.DAGNode.create)
 
 var ROUND_TIME = 10 // seconds
 var BLOCKCHAIN_ID = "lucky-chain-0.1"
@@ -205,15 +205,15 @@ class Blockchain {
 
     this.ipfs = new IPFS(this.options.ipfsOptions)
 
-    this.ipfs.idSync = fiberUtils.wrap(this.ipfs.id)
-    this.ipfs.object.getSync = fiberUtils.wrap(this.ipfs.object.get)
-    this.ipfs.object.putSync = fiberUtils.wrap(this.ipfs.object.put)
-    this.ipfs.object.statSync = fiberUtils.wrap(this.ipfs.object.stat)
-    this.ipfs.pin.addSync = fiberUtils.wrap(this.ipfs.pin.add)
-    this.ipfs.pin.rmSync = fiberUtils.wrap(this.ipfs.pin.rm)
-    this.ipfs.pubsub.pubSync = fiberUtils.wrap(this.ipfs.pubsub.pub)
-    this.ipfs.pubsub.subSync = fiberUtils.wrap(this.ipfs.pubsub.sub)
-    this.ipfs.pubsub.peersSync = fiberUtils.wrap(this.ipfs.pubsub.peers)
+    this.ipfs.idSync = FiberUtils.wrap(this.ipfs.id)
+    this.ipfs.object.getSync = FiberUtils.wrap(this.ipfs.object.get)
+    this.ipfs.object.putSync = FiberUtils.wrap(this.ipfs.object.put)
+    this.ipfs.object.statSync = FiberUtils.wrap(this.ipfs.object.stat)
+    this.ipfs.pin.addSync = FiberUtils.wrap(this.ipfs.pin.add)
+    this.ipfs.pin.rmSync = FiberUtils.wrap(this.ipfs.pin.rm)
+    this.ipfs.pubsub.pubSync = FiberUtils.wrap(this.ipfs.pubsub.pub)
+    this.ipfs.pubsub.subSync = FiberUtils.wrap(this.ipfs.pubsub.sub)
+    this.ipfs.pubsub.peersSync = FiberUtils.wrap(this.ipfs.pubsub.peers)
 
     this.peers = new Map()
 
@@ -301,28 +301,28 @@ class Blockchain {
     this.socketIo.on("connection", (socket) => {
       console.log("HTTP client connected")
 
-      socket.on('peers', fiberUtils.in(() => {
+      socket.on('peers', FiberUtils.in(() => {
         socket.emit('peersResult', this.getPeers())
       }))
 
-      socket.on('chain', fiberUtils.in(() => {
+      socket.on('chain', FiberUtils.in(() => {
         socket.emit('chainResult', this.getChain())
       }))
     })
 
-    this.node.get("/peers", fiberUtils.in((req, res, next) => {
+    this.node.get("/peers", FiberUtils.in((req, res, next) => {
       res.status(200).json({
         peers: this.getPeers()
       })
     }))
 
-    this.node.get("/chain", fiberUtils.in((req, res, next) => {
+    this.node.get("/chain", FiberUtils.in((req, res, next) => {
       res.status(200).json({
         chain: this.getChain()
       })
     }))
 
-    this.node.post("/tx", fiberUtils.in((req, res, next) => {
+    this.node.post("/tx", FiberUtils.in((req, res, next) => {
       // TODO: Validate that it is a POST request.
 
       if (!_.isObject(req.body) || !req.body.type || !req.body.data || !_.isString(req.body.data)) {
@@ -357,19 +357,19 @@ class Blockchain {
 
   _startPubSub() {
     var transactions = this.ipfs.pubsub.subSync(this.getTransactionsTopic(), {discover: true})
-    transactions.on('data', fiberUtils.in((obj) => {
+    transactions.on('data', FiberUtils.in((obj) => {
       if (obj.data) {
         this._onTransaction(obj.data.toString('utf8'))
       }
     }))
     var blocks = this.ipfs.pubsub.subSync(this.getBlocksTopic(), {discover: true})
-    blocks.on('data', fiberUtils.in((obj) => {
+    blocks.on('data', FiberUtils.in((obj) => {
       if (obj.data) {
         this._onBlock(obj.data.toString('utf8'))
       }
     }))
 
-    setInterval(fiberUtils.in(() => {
+    setInterval(FiberUtils.in(() => {
       this._updatePeers()
     }), this.options.peersUpdateInterval)
   }
@@ -454,19 +454,21 @@ class Blockchain {
    * for committing pending transactions.
    */
   _newRound(roundBlock) {
-    if (this._roundCallback) {
-      clearInterval(this._roundCallback)
-      this._roundCallback = null
-    }
-    if (this._cancelMining) {
-      this._cancelMining()
-      this._cancelMining = null
-    }
-    enclave.teeProofOfLuckRoundSync(roundBlock.getPayload().toJSON())
-    this._roundBlock = roundBlock
-    this._roundCallback = setTimeout(fiberUtils.in(() => {
-      this._commitPendingTransactions()
-    }), ROUND_TIME * 1000) // ms
+    FiberUtils.synchronize(this, '_newRound', () => {
+      if (this._roundCallback) {
+        clearInterval(this._roundCallback)
+        this._roundCallback = null
+      }
+      if (this._cancelMining) {
+        this._cancelMining()
+        this._cancelMining = null
+      }
+      enclave.teeProofOfLuckRoundSync(roundBlock.getPayload().toJSON())
+      this._roundBlock = roundBlock
+      this._roundCallback = setTimeout(FiberUtils.in(() => {
+        this._commitPendingTransactions()
+      }), ROUND_TIME * 1000) // ms
+    })
   }
 
   _commitPendingTransactions() {
@@ -499,6 +501,8 @@ class Blockchain {
     newPayload.address = newPayloadAddress
 
     this._cache.set(newPayloadAddress, newPayload)
+
+    assert(!this._cancelMining, "this._cancelMining is set")
 
     var proof
     var result = enclave.teeProofOfLuckMineSync(newPayload.toJSON(), this._latestBlock ? this._latestBlock.toJSON() : null, this._latestBlock ? this._latestBlock.getPayload().toJSON() : null)
@@ -653,7 +657,7 @@ class Blockchain {
 }
 
 module.exports = function blockchain(node, options) {
-  fiberUtils.in(() => {
+  FiberUtils.in(() => {
     new Blockchain(node, options).start()
   })()
 }

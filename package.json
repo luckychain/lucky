@@ -35,7 +35,8 @@
     "multihashing-async": "git://github.com/multiformats/js-multihashing-async.git#154001d3c0b4e0b51a838af934b47fa09fd8417a",
     "bs58": "^4.0.0",
     "fibers": "^1.0.15",
-    "clone": "^2.1.0"
+    "clone": "^2.1.0",
+    "fiber-utils": "^0.7.2"
   },
   "engines": {
     "node": "5.1.0"

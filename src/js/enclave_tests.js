@@ -2,9 +2,9 @@ var stringify = require('json-stable-stringify')
 var dagPB = require('ipld-dag-pb')
 var enclave = require('./enclave')()
 var SecureWorker = require('./secureworker')
-var fiberUtils = require('./fiber-utils')
+var FiberUtils = require('./fiber-utils')
 
-var DAGNodeCreateSync = fiberUtils.wrap(dagPB.DAGNode.create)
+var DAGNodeCreateSync = FiberUtils.wrap(dagPB.DAGNode.create)
 
 // They should share a common parent.
 var PREVIOUS_BLOCK_PAYLOAD_1 = {
@@ -74,7 +74,7 @@ var GENESIS_PAYLOAD = {
   Links: []
 }
 
-fiberUtils.in(function () {
+FiberUtils.in(function () {
   console.log("Mining a genesis block")
   var proof = enclave.teeProofOfLuckMineSync(GENESIS_PAYLOAD, null, null)
 
@@ -102,7 +102,7 @@ fiberUtils.in(function () {
   if (!errorThrown) throw new Error("Error has not been thrown")
 
   console.log("Waiting 10 seconds")
-  fiberUtils.sleep(10000)
+  FiberUtils.sleep(10000)
 
   console.log("Mining a block")
   proof = enclave.teeProofOfLuckMineSync(NEW_PAYLOAD, PREVIOUS_BLOCK, PREVIOUS_BLOCK_PAYLOAD_2)
