@@ -99,7 +99,9 @@ FiberUtils.in(function () {
     result.future.wait()
   }
   catch (error) {
-    errorThrown = true
+    if (/now < roundTime \+ ROUND_TIME/.test(`${error}`)) {
+      errorThrown = true
+    }
   }
   if (!errorThrown) throw new Error("Error has not been thrown")
 
