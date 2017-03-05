@@ -450,10 +450,25 @@ class Blockchain {
 
     var peers = _.union(transactionsPeers, blocksPeers)
 
+    var added = 0
+    var removed = 0
+
     for (var peer of peers) {
       if (!this.peers.has(peer)) {
         this.peers.set(peer, this.ipfs.idSync(peer))
+        added++
       }
+    }
+
+    for (var peer of this.peers.keys()) {
+      if (_.indexOf(peers, peer) === -1) {
+        this.peers.delete(peer)
+        removed++
+      }
+    }
+
+    if (added || removed) {
+      console.log(`Peers updated: ${added} added, ${removed} removed, ${this.peers.size} total`)
     }
   }
 
