@@ -454,6 +454,8 @@ class Blockchain {
    * for committing pending transactions.
    */
   _newRound(roundBlock) {
+    // This can potentially be called quickly one after the other, if many new latest block are arriving.
+    // Because teeProofOfLuckRoundSync yields, we want to assure is consistent and calls to _newRound are queued.
     FiberUtils.synchronize(this, '_newRound', () => {
       if (this._roundCallback) {
         clearTimeout(this._roundCallback)
@@ -472,79 +474,84 @@ class Blockchain {
   }
 
   _commitPendingTransactions() {
-    var newTransactions = this._pendingTransactions
-    this._pendingTransactions = []
+    // This should be called only every ROUND_TIME seconds, but just to be sure no two calls happen
+    // in parallel we are making it a critical section. This one prematurely ends when mining is canceled,
+    // so there should not really be any calls queued.
+    FiberUtils.synchronize(this, '_commitPendingTransactions', () => {
+      var newTransactions = this._pendingTransactions
+      this._pendingTransactions = []
 
-    var newPayloadObject = {
-      Data: "",
-      Links: newTransactions
-    }
-
-    if (this._latestBlock) {
-      newPayloadObject.Links.push({
-        Name: "parent",
-        Hash: this._latestBlock.getAddress(),
-        Size: this._latestBlock.getCumulativeSize()
-      })
-    }
-    else {
-      // To make sure an object has at least some data.
-      // We cannot store an object with no data and no links.
-      newPayloadObject.Data = "GENESIS"
-    }
-
-    var newPayload = new Payload(this, newPayloadObject)
-
-    var newPayloadResponse = this.ipfs.object.putSync(newPayload.toJSON())
-    var newPayloadAddress = newPayloadResponse.toJSON().multihash
-
-    newPayload.address = newPayloadAddress
-
-    this._cache.set(newPayloadAddress, newPayload)
-
-    assert(!this._cancelMining, "this._cancelMining is set")
-
-    var proof
-    var result = enclave.teeProofOfLuckMineSync(newPayload.toJSON(), this._latestBlock ? this._latestBlock.toJSON() : null, this._latestBlock ? this._latestBlock.getPayload().toJSON() : null)
-    this._cancelMining = result.cancel
-    try {
-      proof = result.future.wait()
-      // If mining was canceled.
-      if (!proof) {
-        return
+      var newPayloadObject = {
+        Data: "",
+        Links: newTransactions
       }
-    }
-    finally {
-      this._cancelMining = null
-    }
-    var nonce = enclave.teeProofOfLuckNonce(proof.Quote)
 
-    assert(nonce.hash === newPayloadAddress, `Nonce hash '${nonce.hash}' does not match payload address '${newPayloadAddress}'`)
+      if (this._latestBlock) {
+        newPayloadObject.Links.push({
+          Name: "parent",
+          Hash: this._latestBlock.getAddress(),
+          Size: this._latestBlock.getCumulativeSize()
+        })
+      }
+      else {
+        // To make sure an object has at least some data.
+        // We cannot store an object with no data and no links.
+        newPayloadObject.Data = "GENESIS"
+      }
 
-    var newBlock = new Block(this, {
-      Data: JSON.stringify({
-        Luck: nonce.luck,
-        Proof: {
-          Quote: bs58.encode(new Buffer(proof.Quote)),
-          Attestation: bs58.encode(new Buffer(proof.Attestation))
+      var newPayload = new Payload(this, newPayloadObject)
+
+      var newPayloadResponse = this.ipfs.object.putSync(newPayload.toJSON())
+      var newPayloadAddress = newPayloadResponse.toJSON().multihash
+
+      newPayload.address = newPayloadAddress
+
+      this._cache.set(newPayloadAddress, newPayload)
+
+      assert(!this._cancelMining, "this._cancelMining is set")
+
+      var proof
+      var result = enclave.teeProofOfLuckMineSync(newPayload.toJSON(), this._latestBlock ? this._latestBlock.toJSON() : null, this._latestBlock ? this._latestBlock.getPayload().toJSON() : null)
+      this._cancelMining = result.cancel
+      try {
+        proof = result.future.wait()
+        // If mining was canceled.
+        if (!proof) {
+          return
         }
-      }),
-      Links: [{
-        Name: "payload",
-        Hash: newPayloadAddress,
-        Size: newPayload.getCumulativeSize()
-      }]
+      }
+      finally {
+        this._cancelMining = null
+      }
+      var nonce = enclave.teeProofOfLuckNonce(proof.Quote)
+
+      assert(nonce.hash === newPayloadAddress, `Nonce hash '${nonce.hash}' does not match payload address '${newPayloadAddress}'`)
+
+      var newBlock = new Block(this, {
+        Data: JSON.stringify({
+          Luck: nonce.luck,
+          Proof: {
+            Quote: bs58.encode(new Buffer(proof.Quote)),
+            Attestation: bs58.encode(new Buffer(proof.Attestation))
+          }
+        }),
+        Links: [{
+          Name: "payload",
+          Hash: newPayloadAddress,
+          Size: newPayload.getCumulativeSize()
+        }]
+      })
+
+      var newBlockResponse = this.ipfs.object.putSync(newBlock.toJSON())
+      var newBlockAddress = newBlockResponse.toJSON().multihash
+
+      newBlock.address = newBlockAddress
+
+      this._cache.set(newBlockAddress, newBlock)
+
+      this.ipfs.pubsub.pubSync(this.getBlocksTopic(), newBlockAddress)
+      console.log(`New block mined: ${newBlockAddress} (parent ${newBlock.getParentLink()}, luck ${newBlock.getLuck()}, transactions ${newBlock.getPayload().getTransactionsLinks().length})`)
     })
-
-    var newBlockResponse = this.ipfs.object.putSync(newBlock.toJSON())
-    var newBlockAddress = newBlockResponse.toJSON().multihash
-
-    newBlock.address = newBlockAddress
-
-    this._cache.set(newBlockAddress, newBlock)
-
-    this.ipfs.pubsub.pubSync(this.getBlocksTopic(), newBlockAddress)
-    console.log(`New block mined: ${newBlockAddress} (parent ${newBlock.getParentLink()}, luck ${newBlock.getLuck()}, transactions ${newBlock.getPayload().getTransactionsLinks().length})`)
   }
 
   _startMining() {
