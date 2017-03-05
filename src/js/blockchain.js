@@ -207,11 +207,10 @@ class Block extends Node {
   }
 
   _computeChainLuck() {
-    var luck = 0
-    var block = this
-    while (block) {
-      luck += block.getLuck()
-      block = block.getParent()
+    var luck = this.getLuck()
+    var parent = this.getParent()
+    if (parent) {
+      luck += parent.getChainLuck()
     }
     return luck
   }
