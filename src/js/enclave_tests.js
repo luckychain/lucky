@@ -76,7 +76,8 @@ var GENESIS_PAYLOAD = {
 
 FiberUtils.in(function () {
   console.log("Mining a genesis block")
-  var proof = enclave.teeProofOfLuckMineSync(GENESIS_PAYLOAD, null, null)
+  var result = enclave.teeProofOfLuckMineSync(GENESIS_PAYLOAD, null, null)
+  var proof = result.future.wait()
 
   if (!SecureWorker.validateRemoteAttestation(proof.Quote, proof.Attestation)) throw new Error("Remote attestation is not valid")
 
@@ -94,7 +95,8 @@ FiberUtils.in(function () {
   // It should throw an error if it is called too soon.
   var errorThrown = false
   try {
-    enclave.teeProofOfLuckMineSync(NEW_PAYLOAD, PREVIOUS_BLOCK, PREVIOUS_BLOCK_PAYLOAD_2)
+    result = enclave.teeProofOfLuckMineSync(NEW_PAYLOAD, PREVIOUS_BLOCK, PREVIOUS_BLOCK_PAYLOAD_2)
+    result.future.wait()
   }
   catch (error) {
     errorThrown = true
@@ -105,7 +107,8 @@ FiberUtils.in(function () {
   FiberUtils.sleep(10000)
 
   console.log("Mining a block")
-  proof = enclave.teeProofOfLuckMineSync(NEW_PAYLOAD, PREVIOUS_BLOCK, PREVIOUS_BLOCK_PAYLOAD_2)
+  result = enclave.teeProofOfLuckMineSync(NEW_PAYLOAD, PREVIOUS_BLOCK, PREVIOUS_BLOCK_PAYLOAD_2)
+  proof = result.future.wait()
 
   if (!SecureWorker.validateRemoteAttestation(proof.Quote, proof.Attestation)) throw new Error("Remote attestation is not valid")
 
