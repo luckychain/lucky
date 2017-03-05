@@ -485,12 +485,27 @@ class Blockchain {
       return
     }
 
+    assert(!this._roundBlock || !this._latestBlock || this._latestBlock.getParentLink() === this._roundBlock.getParentLink(), "Latest's block parent link is not the same as round's block parent link")
+
+    // We have already mined a block and are sleeping before releasing it. It is strange that we would get a block
+    // extending current chain before we released our block, if our block is luckier than the block we just received.
+    // So we check for this special case and ignore such blocks, because once we release our block the chain for everyone
+    // will switch to this our chain anyway. If we were not ignore it, this block would trigger a new round and our mining
+    // of luckier block would be terminated.
+    if (this._roundBlock && this._latestBlock && this._miningResult && _.isFinite(this._miningResult.luck) && block.getParent().getParentLink() === this._roundBlock.getParentLink() && (block.getLuck() + block.getParent().getLuck() < this._miningResult.luck + this._latestBlock.getLuck())) {
+      console.log(`Received new luckier latest block out of order, ignoring: ${block}`)
+      return
+    }
+
     console.log(`New latest block: ${block}`)
 
     var previousLatestBlock = this._latestBlock
     this._latestBlock = block
 
     if (this._roundBlock) {
+      // If during a mining on a round block we get a better chain, we do not switch to mining on this better chain
+      // if the parent of both blocks is the same. This can happen if the chain was prolonged and we start mining
+      // on it, but then a delayed best chain from the previous round arrives. Chains are equal up to the last block.
       if (this._latestBlock.getParentLink() !== this._roundBlock.getParentLink()) {
         this._newRound(block)
       }
