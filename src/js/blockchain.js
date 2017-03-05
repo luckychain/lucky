@@ -693,7 +693,7 @@ class Blockchain {
 }
 
 module.exports = function blockchain(node, options) {
-  FiberUtils.in(() => {
+  FiberUtils.ensure(() => {
     new Blockchain(node, options).start()
-  })()
+  })
 }
