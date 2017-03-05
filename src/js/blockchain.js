@@ -492,7 +492,7 @@ class Blockchain {
     // So we check for this special case and ignore such blocks, because once we release our block the chain for everyone
     // will switch to this our chain anyway. If we were not ignore it, this block would trigger a new round and our mining
     // of luckier block would be terminated.
-    if (this._roundBlock && this._latestBlock && this._miningResult && _.isFinite(this._miningResult.luck) && block.getParent().getParentLink() === this._roundBlock.getParentLink() && (block.getLuck() + block.getParent().getLuck() < this._miningResult.luck + this._latestBlock.getLuck())) {
+    if (this._roundBlock && this._latestBlock && this._miningResult && _.isFinite(this._miningResult.luck) && block.getParent() && block.getParent().getParentLink() === this._roundBlock.getParentLink() && (block.getLuck() + block.getParent().getLuck() < this._miningResult.luck + this._latestBlock.getLuck())) {
       console.log(`Received new luckier latest block out of order, ignoring: ${block}`)
       return
     }
