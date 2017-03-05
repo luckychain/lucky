@@ -133,6 +133,7 @@ class Payload extends Node {
 }
 
 class Block extends Node {
+  // Constructor validates the block and its whole chain and throws an exception if anything is invalid.
   constructor(blockchain, object, address) {
     super(blockchain, object, address)
 
@@ -168,6 +169,12 @@ class Block extends Node {
     if (nonce.hash !== this.getPayloadLink()) {
       throw new Error("Proof's payload does not match block's payload")
     }
+
+    if (!this._isValidChain()) {
+      throw new Error("Block with an invalid chain: " + this.address)
+    }
+
+    this.chainLuck = this._computeChainLuck()
   }
 
   getPayloadLink() {
@@ -192,6 +199,29 @@ class Block extends Node {
 
   getParent() {
     return this.getPayload().getParent()
+  }
+
+  _isValidChain() {
+    // TODO: Implement.
+    return true
+  }
+
+  _computeChainLuck() {
+    var luck = 0
+    var block = this
+    while (block) {
+      luck += block.getLuck()
+      block = block.getParent()
+    }
+    return luck
+  }
+
+  getChainLuck() {
+    return this.chainLuck
+  }
+
+  pinChain() {
+    // TODO: Implement.
   }
 }
 
@@ -410,17 +440,17 @@ class Blockchain {
   }
 
   _onBlock(blockAddress) {
+    // Block constructor also validates the whole chain.
     var block = this.getBlock(blockAddress)
 
-    if (!this.isValidChain(block)) {
+    // getBlock can yield, but it does not matter, we can still compare.
+    if (this._latestBlock && block.getChainLuck() <= this._latestBlock.getChainLuck()) {
       return
     }
 
-    if (this._latestBlock && this.getChainLuck(block) <= this.getChainLuck(this._latestBlock)) {
-      return
-    }
+    console.log(`New latest block: ${block.getAddress()} (parent ${block.getParentLink()}, luck ${block.getLuck()}, time ${block.getTimestamp()})`)
 
-    this._newLatestBlock(block)
+    this._latestBlock = block
 
     if (this._roundBlock) {
       if (this._latestBlock.getParentLink() !== this._roundBlock.getParentLink()) {
@@ -431,17 +461,18 @@ class Blockchain {
       this._newRound(block)
     }
 
+    // _newRound could yield, so we make sure we still have the same latest block.
+    if (this._latestBlock !== block) {
+      return
+    }
+
     // TODO: Pub/sub should broadcast this block only now.
     //       Currently pub/sub broadcasts every block fully to everyone. We want that only if a block has been
     //       processed to the end here, this node broadcasts it further. Eg., it could be that the block represents
     //       a chain which is invalid or less lucky than currently known best (latest) chain.
     //       See: https://github.com/ipfs/go-ipfs/issues/3741
-  }
 
-  _newLatestBlock(block) {
-    console.log(`New latest block: ${block.getAddress()} (parent ${block.getParentLink()}, luck ${block.getLuck()}, time ${block.getTimestamp()})`)
-
-    this._latestBlock = block
+   this._latestBlock.pinChain()
   }
 
   _updatePeers() {
@@ -593,40 +624,12 @@ class Blockchain {
     // Maybe we loaded the latest block from somewhere, but have
     // not yet started a new around. Let us resume mining from there.
     if (this._latestBlock) {
-      var latestBlock = this._latestBlock
-      // Sanity check, and to populate the cache.
-      if (this.isValidBlock(latestBlock)) {
-        throw new Error("Invalid starting latest block")
-      }
-
-      // We check that nothing changed because fiber could yield in meantime.
-      if (latestBlock === this._latestBlock) {
-        this._newRound(latestBlock)
-      }
-      else {
-        // Try again.
-        this._startMining()
-      }
-
+      this._newRound(this._latestBlock)
       return
     }
 
     // We start a new genesis block. A genesis block does not require to start a round.
     this._commitPendingTransactions()
-  }
-
-  isValidChain(block) {
-    // TODO: Implement.
-    return true
-  }
-
-  getChainLuck(block) {
-    var luck = 0
-    while (block) {
-      luck += block.getLuck()
-      block = block.getParent()
-    }
-    return luck
   }
 
   /**
