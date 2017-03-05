@@ -142,7 +142,9 @@ function getIpfsLink(object, linkName) {
 }
 
 function f(l) {
-  return (1 - l) * ROUND_TIME
+  // We always wait at least one second. This allows all peers to at least compute their own lucky numbers
+  // and then be able to know if they are winning or not, and if they should ignore less luckier blocks.
+  return (1 - l) * ROUND_TIME / 2 + 1
 }
 
 function verifyPayload(payload) {
