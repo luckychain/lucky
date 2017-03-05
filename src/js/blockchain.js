@@ -456,7 +456,7 @@ class Blockchain {
   _newRound(roundBlock) {
     FiberUtils.synchronize(this, '_newRound', () => {
       if (this._roundCallback) {
-        clearInterval(this._roundCallback)
+        clearTimeout(this._roundCallback)
         this._roundCallback = null
       }
       if (this._cancelMining) {
