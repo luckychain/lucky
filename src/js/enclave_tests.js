@@ -43,12 +43,13 @@ var PREVIOUS_BLOCK_PAYLOAD_2 = {
 var PREVIOUS_BLOCK = {
   Data: stringify({
     Luck: 0.4,
-    Proof: "<TEE signature>"
+    Proof: "<TEE signature>",
+    Time: new Date("2017-03-05T11:02:28.771Z")
   }),
   Links: [{
     Name: "payload",
     Hash: "Qma11Npj9XqsCJK5DvQLjTXLKcwUCwJqUSmTchpnV7f8SM", // PREVIOUS_BLOCK_PAYLOAD_2
-    Size: 819
+    Size: 824
   }]
 }
 
@@ -64,8 +65,8 @@ var NEW_PAYLOAD = {
     Size: 221
   }, {
     Name: "parent",
-    Hash: "QmRmc5oe4fvphRtvA9q2W5BXDGnZYaHaYEA6TenfHcTDm4", // PREVIOUS_BLOCK
-    Size: 909
+    Hash: "QmWqGRxAJa8yoDpnR68kc9NYb31pHSCUtTyceqFUoSvpFa", // PREVIOUS_BLOCK
+    Size: 948
   }]
 }
 

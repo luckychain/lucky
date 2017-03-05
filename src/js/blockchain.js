@@ -148,9 +148,13 @@ class Block extends Node {
     if (!_.isObject(this.data.Proof) || !this.data.Proof.Attestation || !this.data.Proof.Quote) {
       throw new Error("Invalid proof")
     }
+    if (!_.isString(this.data.Time)) {
+      throw new Error("Invalid timestamp")
+    }
 
     this.data.Proof.Attestation = new Uint8Array(bs58.decode(this.data.Proof.Attestation)).buffer
     this.data.Proof.Quote = new Uint8Array(bs58.decode(this.data.Proof.Quote)).buffer
+    this.data.Time = new Date(this.data.Time)
 
     if (!SecureWorker.validateRemoteAttestation(this.data.Proof.Quote, this.data.Proof.Attestation)) {
       throw new Error("Invalid attestation")
@@ -176,6 +180,10 @@ class Block extends Node {
 
   getLuck() {
     return this.data.Luck
+  }
+
+  getTimestamp() {
+    return this.data.Time
   }
 
   getParentLink() {
@@ -431,7 +439,7 @@ class Blockchain {
   }
 
   _newLatestBlock(block) {
-    console.log(`New latest block: ${block.getAddress()} (parent ${block.getParentLink()}, luck ${block.getLuck()})`)
+    console.log(`New latest block: ${block.getAddress()} (parent ${block.getParentLink()}, luck ${block.getLuck()}, time ${block.getTimestamp()})`)
 
     this._latestBlock = block
   }
@@ -537,7 +545,9 @@ class Blockchain {
           Proof: {
             Quote: bs58.encode(new Buffer(proof.Quote)),
             Attestation: bs58.encode(new Buffer(proof.Attestation))
-          }
+          },
+          // Not trusted timestamp.
+          Time: new Date()
         }),
         Links: [{
           Name: "payload",
@@ -554,7 +564,7 @@ class Blockchain {
       this._cache.set(newBlockAddress, newBlock)
 
       this.ipfs.pubsub.pubSync(this.getBlocksTopic(), newBlockAddress)
-      console.log(`New block mined: ${newBlockAddress} (parent ${newBlock.getParentLink()}, luck ${newBlock.getLuck()}, transactions ${newBlock.getPayload().getTransactionsLinks().length})`)
+      console.log(`New block mined: ${newBlockAddress} (parent ${newBlock.getParentLink()}, luck ${newBlock.getLuck()}, time ${newBlock.getTimestamp()}, transactions ${newBlock.getPayload().getTransactionsLinks().length})`)
     })
   }
 
