@@ -223,6 +223,14 @@ class Block extends Node {
   pinChain() {
     // TODO: Implement.
   }
+
+  // Records in IPNS are stored signed with our key, so they cannot be faked, but they could
+  // be reverted to old values. We use this as an optimization anyway, to better know where to
+  // start initially, but it is not really needed. In the worst case a peer will quickly learns
+  // about new latest block.
+  rememberInIPNS() {
+    // TODO: Implement. Store current block into IPNS.
+  }
 }
 
 class Blockchain {
@@ -252,6 +260,8 @@ class Blockchain {
     this.ipfs.pubsub.pubSync = FiberUtils.wrap(this.ipfs.pubsub.pub)
     this.ipfs.pubsub.subSync = FiberUtils.wrap(this.ipfs.pubsub.sub)
     this.ipfs.pubsub.peersSync = FiberUtils.wrap(this.ipfs.pubsub.peers)
+    this.ipfs.name.publishSync = FiberUtils.wrap(this.ipfs.name.publish)
+    this.ipfs.name.resolveSync = FiberUtils.wrap(this.ipfs.name.resolve)
 
     this.peers = new Map()
 
@@ -302,6 +312,7 @@ class Blockchain {
 
   start() {
     this._getIPFSInfo()
+    this._restoreFromIPNS()
     this._startPubSub()
     this._startWebInterface()
     this._startMining()
@@ -473,6 +484,13 @@ class Blockchain {
     //       See: https://github.com/ipfs/go-ipfs/issues/3741
 
    this._latestBlock.pinChain()
+
+    // We could yield, so we compare.
+    if (this._latestBlock !== block) {
+      return
+    }
+
+    this._latestBlock.rememberInIPNS()
   }
 
   _updatePeers() {
@@ -614,6 +632,10 @@ class Blockchain {
     })
   }
 
+  _restoreFromIPNS() {
+    // TODO: Implement. Set this._latestBlock to the block from IPNS.
+  }
+
   _startMining() {
     // It could happen that we already received a block from peers
     // and/or already start a new round.
@@ -621,7 +643,7 @@ class Blockchain {
       return
     }
 
-    // Maybe we loaded the latest block from somewhere, but have
+    // Maybe we restored the latest block from somewhere, like IPNS, but have
     // not yet started a new around. Let us resume mining from there.
     if (this._latestBlock) {
       this._newRound(this._latestBlock)
