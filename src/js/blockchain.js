@@ -366,6 +366,15 @@ class Blockchain {
     return chain
   }
 
+  getPendingTransactions() {
+    return this._pendingTransactions
+  }
+
+  getSGXVersion() {
+    // TODO: We should return SGX version (version of platform, enclave, etc.). And null for mock.
+    return null
+  }
+
   _getIPFSInfo() {
     this.ipfsInfo = this.ipfs.idSync()
     console.log("IPFS info", this.ipfsInfo)
@@ -380,6 +389,14 @@ class Blockchain {
     this.socketIo.on("connection", (socket) => {
       console.log("HTTP client connected")
 
+      socket.on('id', FiberUtils.in(() => {
+        socket.emit('idResult', this.options.blockchainId)
+      }, this, this.id))
+
+      socket.on('sgx', FiberUtils.in(() => {
+        socket.emit('sgxResult', this.getSGXVersion())
+      }, this, this._handleErrors))
+
       socket.on('peers', FiberUtils.in(() => {
         socket.emit('peersResult', this.getPeers())
       }, this, this._handleErrors))
@@ -387,23 +404,43 @@ class Blockchain {
       socket.on('chain', FiberUtils.in(() => {
         socket.emit('chainResult', this.getChain())
       }, this, this._handleErrors))
+
+      socket.on('pending', FiberUtils.in(() => {
+        socket.emit('pendingResult', this.getPendingTransactions())
+      }, this, this._handleErrors))
     })
 
-    this.node.get("/peers", FiberUtils.in((req, res, next) => {
+    this.node.get("/api/v0/id", FiberUtils.in((req, res, next) => {
+      res.status(200).json({
+        id: this.options.blockchainId
+      })
+    }, this, this._handleErrors))
+
+    this.node.get("/api/v0/sgx", FiberUtils.in((req, res, next) => {
+      res.status(200).json({
+        sgx: this.getSGXVersion()
+      })
+    }, this, this._handleErrors))
+
+    this.node.get("/api/v0/peers", FiberUtils.in((req, res, next) => {
       res.status(200).json({
         peers: this.getPeers()
       })
     }, this, this._handleErrors))
 
-    this.node.get("/chain", FiberUtils.in((req, res, next) => {
+    this.node.get("/api/v0/chain", FiberUtils.in((req, res, next) => {
       res.status(200).json({
         chain: this.getChain()
       })
     }, this, this._handleErrors))
 
-    this.node.post("/tx", FiberUtils.in((req, res, next) => {
-      // TODO: Validate that it is a POST request.
+    this.node.get("/api/v0/pending", FiberUtils.in((req, res, next) => {
+      res.status(200).json({
+        pending: this.getPendingTransactions()
+      })
+    }, this, this._handleErrors))
 
+    this.node.post("/api/v0/tx", FiberUtils.in((req, res, next) => {
       if (!_.isObject(req.body) || !req.body.type || !req.body.data || !_.isString(req.body.data)) {
         res.status(400).json({error: "invalid"})
         return
@@ -478,6 +515,8 @@ class Blockchain {
     //       that the transaction has been already known and so it has already broadcast it before, so it does not
     //       have to do it now again.
     //       See: https://github.com/ipfs/go-ipfs/issues/3741
+
+    this.socketIo.emit('pendingResult', this.getPendingTransactions())
   }
 
   _onBlock(blockAddress) {
@@ -537,6 +576,8 @@ class Blockchain {
     }
 
     this._latestBlock.rememberInIPNS()
+
+    this.socketIo.emit('chainResult', this.getChain())
   }
 
   _updatePeers() {
@@ -564,6 +605,7 @@ class Blockchain {
 
     if (added || removed) {
       console.log(`Peers updated: ${added} added, ${removed} removed, ${this.peers.size} total`)
+      this.socketIo.emit('peersResult', this.getPeers())
     }
   }
 
@@ -704,6 +746,8 @@ class Blockchain {
 
       this.ipfs.pubsub.pubSync(this.getBlocksTopic(), newBlockAddress)
       console.log(`New block mined: ${newBlock}`)
+
+      this.socketIo.emit('pendingResult', this.getPendingTransactions())
     })
   }
 
