@@ -378,24 +378,24 @@ class Blockchain {
 
       socket.on('peers', FiberUtils.in(() => {
         socket.emit('peersResult', this.getPeers())
-      }))
+      }, this, this._handleErrors))
 
       socket.on('chain', FiberUtils.in(() => {
         socket.emit('chainResult', this.getChain())
-      }))
+      }, this, this._handleErrors))
     })
 
     this.node.get("/peers", FiberUtils.in((req, res, next) => {
       res.status(200).json({
         peers: this.getPeers()
       })
-    }))
+    }, this, this._handleErrors))
 
     this.node.get("/chain", FiberUtils.in((req, res, next) => {
       res.status(200).json({
         chain: this.getChain()
       })
-    }))
+    }, this, this._handleErrors))
 
     this.node.post("/tx", FiberUtils.in((req, res, next) => {
       // TODO: Validate that it is a POST request.
@@ -415,7 +415,7 @@ class Blockchain {
       else {
         res.status(400).json({error: "invalid"})
       }
-    }))
+    }, this, this._handleErrors))
 
     this.node.get("*", (req, res, next) => {
       res.render("template")
@@ -436,17 +436,17 @@ class Blockchain {
       if (obj.data) {
         this._onTransaction(obj.data.toString('utf8'))
       }
-    }))
+    }, this, this._handleErrors))
     var blocks = this.ipfs.pubsub.subSync(this.getBlocksTopic(), {discover: true})
     blocks.on('data', FiberUtils.in((obj) => {
       if (obj.data) {
         this._onBlock(obj.data.toString('utf8'))
       }
-    }))
+    }, this, this._handleErrors))
 
     setInterval(FiberUtils.in(() => {
       this._updatePeers()
-    }), this.options.peersUpdateInterval * 1000) // ms
+    }, this, this._handleErrors), this.options.peersUpdateInterval * 1000) // ms
   }
 
   _onTransaction(transactionAddress) {
@@ -583,7 +583,7 @@ class Blockchain {
       this._roundBlock = roundBlock
       this._roundCallback = setTimeout(FiberUtils.in(() => {
         this._commitPendingTransactions()
-      }), ROUND_TIME * 1000) // ms
+      }, this, this._handleErrors), ROUND_TIME * 1000) // ms
     })
   }
 
@@ -756,6 +756,10 @@ class Blockchain {
     }
 
     this._onNewTransactionAddress(response.toJSON().multihash, res)
+  }
+
+  _handleErrors(error) {
+    console.error("Exception during execution, continuing", error)
   }
 }
 
