@@ -637,6 +637,9 @@ class Blockchain {
         proof = result.future.wait()
         // If mining was canceled.
         if (!proof) {
+          // TODO: What should we do with our pending transactions? What if they were not included in the winning block?
+          //       Should we try to put them back to be mined with the next block? But how to prevent/detect duplicates
+          //       because currently we allow same transactions in the chain, but just not in the same block.
           return
         }
       }
