@@ -44,7 +44,8 @@ var PREVIOUS_BLOCK = {
   Data: stringify({
     Luck: 0.4,
     Proof: "<TEE signature>",
-    Time: new Date("2017-03-05T11:02:28.771Z")
+    Time: new Date("2017-03-05T11:02:28.771Z"),
+    MinerId: "QmULgY72aAJ4W7Nxb2qpxAGQXsFCFfaQc9qgAsmkvx8YPS"
   }),
   Links: [{
     Name: "payload",
@@ -65,8 +66,8 @@ var NEW_PAYLOAD = {
     Size: 221
   }, {
     Name: "parent",
-    Hash: "QmWqGRxAJa8yoDpnR68kc9NYb31pHSCUtTyceqFUoSvpFa", // PREVIOUS_BLOCK
-    Size: 948
+    Hash: "QmRFUSS8Jbs7wnJrcRPRDJ8xPyiw5EXD5vFPwruDfDuVZa", // PREVIOUS_BLOCK
+    Size: 1008
   }]
 }
 
@@ -102,6 +103,9 @@ FiberUtils.in(function () {
   catch (error) {
     if (/now < roundTime \+ ROUND_TIME/.test(`${error}`)) {
       errorThrown = true
+    }
+    else {
+      throw error
     }
   }
   if (!errorThrown) throw new Error("Error has not been thrown")

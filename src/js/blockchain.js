@@ -207,6 +207,10 @@ class Block extends Node {
     return this.data.Time
   }
 
+  getMinerId() {
+    return this.data.MinerId
+  }
+
   getParentLink() {
     return this.getPayload().getParentLink()
   }
@@ -264,7 +268,7 @@ class Block extends Node {
   }
 
   toString() {
-    return `${this.getAddress()} (parent ${this.getParentLink()}, luck ${this.getLuck()}, time ${this.getTimestamp()}, transactions ${this.getPayload().getTransactionsLinks().length})`
+    return `${this.getAddress()} (parent ${this.getParentLink()}, luck ${this.getLuck()}, time ${this.getTimestamp()}, miner ${this.getMinerId()}, transactions ${this.getPayload().getTransactionsLinks().length})`
   }
 }
 
@@ -678,7 +682,11 @@ class Blockchain {
             Attestation: bs58.encode(new Buffer(proof.Attestation))
           },
           // Not trusted timestamp.
-          Time: new Date()
+          Time: new Date(),
+          // Not trusted miner ID.
+          // TODO: Make peer sign the block, so that the identity cannot be forged.
+          //       See: https://github.com/ipfs/interface-ipfs-core/issues/120
+          MinerId: this.ipfsInfo.id
         }),
         Links: [{
           Name: "payload",
