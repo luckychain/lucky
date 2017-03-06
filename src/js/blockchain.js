@@ -1,1281 +1,853 @@
-var async = require("async")
-var cron = require("cron").CronJob
-var equal = require("deep-equal")
-var fs = require("fs")
-var ngrok = require('ngrok')
-var oboe = require("oboe")
-var pubngrok = require('pubngrok')
-var request = require('request')
-var _ = require("underscore")
-var ipfs = require("ipfs-api")
+var _ = require('underscore')
+var assert = require('assert')
+var socketIo = require('socket.io')
+var IPFS = require('ipfs-api')
 var isIPFS = require('is-ipfs')
-
-// var SecureWorker = require('./secureworker')
-
-ipfs = new ipfs("localhost", "5001")
-
-var blockchain = function (node) {
-
-/******************************** STRUCTURE **********************************/
-  
-  /**
-   * Chain: (Internal Use)
-   * [
-   *   {
-   *     luck: 1208,
-   *     attestation: "<TEE signature>",
-   *     hash: "<address of the block>",
-   *     parent: "<address of the parent block>",
-   *     transactions: [{
-   *       name: "transaction",
-   *       hash: "<address of one transaction>",
-   *     }, {
-   *       name: "transaction",
-   *       hash: "<address of one transaction>"
-   *     }]
-   *   }
-   * ]
-   *
-   * Block:
-   * {
-   *   Data: {
-   *     luck: 1208
-   *     attestation: "<TEE signature>"
-   *   }
-   *   Links: [{
-   *     name: "payload",
-   *     hash: "<address of the payload>"
-   *   }]
-   * }
-   *
-   * Payload: (Block)
-   * {
-   *   Data: ""
-   *   Links: [{
-   *       name: "parent",
-   *       hash: "<address of parent block>
-   *     }, {
-   *       name: "transaction",
-   *       hash: "<address of one transaction>",
-   *       data: "<initial content>"
-   *     }, {
-   *       name: "transaction",
-   *       hash: "<address of one transaction>"
-   *       data: "<initial content>"
-   *     }
-   *   ]
-   * }
-   *
-   * Transactions: (Uncommitted)
-   * {
-   *   Data: "",
-   *   Links: [{
-   *       name: "transaction",
-   *       hash: "<address of one transaction>",
-   *     }, {
-   *       name: "transaction",
-   *       hash: "<address of one transaction>",
-   *     }, {
-   *       name: "transaction",
-   *       hash: "<address of one transaction>"
-   *     }
-   *   ]
-   * }
-   *
-   * Transaction Payload:
-   * {
-   *    Data: "<content>"
-   * }
-   */
-
-/****************************** INITIALIZATION *******************************/
-
-  /* Client Parameters */
-  var ROUND_TIME = 10 /* Time in seconds */
-  var PUBSUB_NUM_PEERS = 5 /* PubSub number of peers to connect to */
-  var CLIENT_PORT = 8000
-
-  /* Storage */
-  var DIRECTORY = "storage"
-  var ID_DIRECTORY = DIRECTORY + "/id"
-  var PUBGROK_DIRECTORY = DIRECTORY + "/pubgrok"
-  var BLOCK_DIRECTORY = DIRECTORY + "/block"
-  var TRANSACTIONS_DIRECTORY = DIRECTORY + "/transactions"
-
-  /* Blockchain */
-  var CRON_ON = false /* System state */
-  var intervalUpdate = false
-  var block = {}
-  var blockHash = ""
-  var transactions = {}
-  var chain = []
-
-  /* PubSub */
-  var seenBlockHashes = []
-  var IPFS_ID = ""
-  var pubSub
-
-  /* TEE */
-  var teeInternalCounter = 1
-  var counter = teeIncrementMonotonicCounter()
-  var roundBlock = null
-  var roundBlockParent = null
-  var roundTime = null
-
-  /* Initialize Blockchain State */
-  initializeLocalState()
-
-  /* Server / Socket Setup */
-  var server = node.listen(CLIENT_PORT, function() {
-    console.log("Listening on port %d", server.address().port)
-  })
-  var io = require('socket.io')(server)
-
-/***************************** HELPER FUNCTIONS ******************************/
-
-  /* Initializes state of IPFS_ID, peers, block, transactions, and chain */
-  function initializeLocalState() {
-    ipfs.id().then((id) => {
-      /* IPFS daemon id */
-      IPFS_ID = id.ID
-      console.log("IPFS_ID: " + IPFS_ID)
-
-      initializePubSub(process.env.PUBLIC_IP).then(() => {
-        /* Discover IPFS peers */
-        ipfsPeerDiscover()
-
-        /* Load local uncommitted transactions state */
-        fs.readFile(TRANSACTIONS_DIRECTORY, function (err, res) {
-          console.log("Initializing local transactions state...")
-
-          if (err || !validObject(res.toString())) {
-            transactions = {
-              Data: "",
-              Links: []
-            }
-
-            fs.writeFile(TRANSACTIONS_DIRECTORY, JSON.stringify(transactions), null)
-          } else {
-            transactions = JSON.parse(res.toString())
-          }
-
-          /* Load local block (chain head) state */
-          fs.readFile(BLOCK_DIRECTORY, function (err, res) {
-            console.log("Initializing local block state...")
-
-            if (err || !validObject(res.toString())) {
-              var data = JSON.stringify({
-                luck: -1,
-                attestation: "GENESIS"
-              })
-
-              var newBlock = {
-                Data: data,
-                Links: [{
-                  name: "payload",
-                  hash: "GENESIS"
-                }]
-              }
-
-              ipfsWriteBlock(newBlock).then((newBlockHash) => {
-                fs.writeFile(BLOCK_DIRECTORY, newBlockHash, null)
-
-                block = newBlock
-                blockHash = newBlockHash
-                chain = []
-
-                chain.push({
-                  luck: -1,
-                  attestation: 'GENESIS',
-                  hash: blockHash,
-                  payload: 'GENESIS',
-                  parent: 'GENESIS',
-                  transactions: []
-                })
-
-                teeProofOfLuckRound(block, chain)
-              })
-            } else {
-              blockHash = res.toString()
-              ipfsGetBlock(blockHash).then((newBlock) => {
-                block = parseIPFSObject(newBlock)
-                ipfsConstructChain(blockHash).then((newChain) => {
-                  chain = newChain
-                  teeProofOfLuckRound(block, chain)
-                })
-              })
-            }
-          })
-        })
-      })
-    }).catch((err) => {
-      console.log("initializeLocalState error: check that ipfs daemon is running")
-      console.log(err)
-    })
-  }
-
-  function initializePubSub(publicIP) {
-    logger("initializePubSub")
-    return new Promise((resolve) => {
-      if (publicIP !== null && publicIP !== "") {
-        ngrok.connect(CLIENT_PORT, function (err, address) {
-          if (err) {
-            console.log(err)
-          }
-          else {
-            console.log('Publisher listening on:', address)
-
-            fs.writeFile(PUBGROK_DIRECTORY, address, null)
-
-            pubSub = new pubngrok(node, address)
-            pubSub.subscribe('block')
-            pubSub.subscribe('transaction')
-
-            ipfsPeerPublish().then((path) => {
-              console.log("Successful initialization, starting...")
-
-              pubSub.on('block', (newBlockHash) => {
-                if (newBlockHash !== blockHash) {
-                  console.log("PubSub: Received from peer a candidate block: " + newBlockHash)
-                  pubSubBlock(new Buffer(newBlockHash), false)
-                }
-              })
-
-              pubSub.on('transaction', (link) => {
-                console.log("PubSub: Received from peer a candidate transaction: " + link)
-                pubSubTransaction(new Buffer(link))
-              })
-
-              CRON_ON = true
-            })
-
-            resolve()
-          }
-        })
-      } else {
-        console.log('Publisher listening on:', publicIP)
-
-        fs.writeFile(PUBGROK_DIRECTORY, publicIP, null)
-
-        pubSub = new pubngrok(node, publicIP)
-        pubSub.subscribe('block')
-        pubSub.subscribe('transaction')
-
-        ipfsPeerPublish().then((path) => {
-          console.log("Successful initialization, starting...")
-
-          pubSub.on('block', (newBlockHash) => {
-            if (newBlockHash !== blockHash) {
-              console.log("PubSub: Received from peer a candidate block: " + newBlockHash)
-              pubSubBlock(new Buffer(newBlockHash), false)
-            }
-          })
-
-          pubSub.on('transaction', (link) => {
-            console.log("PubSub: Received from peer a candidate transaction: " + link)
-            pubSubTransaction(new Buffer(link))
-          })
-
-          CRON_ON = true
-        })
-
-        resolve()
-      }
-    })
-  }
-
-  var LOG_DATA = "----------------------------------------------------------------------"
-
-  /* Prints the current peers every ROUND_TIME interval by the caller. */ 
-  function printInterval() {
-    console.log("[----- ROUND TIME: " + ROUND_TIME + " SECONDS -----]")
-    console.log("Current list of peers: ")
-    console.log(JSON.stringify(pubSub.getPeers(), null, 2))
-  }
-
-  /* Prints debug relevant messages. */
-  function logger(message, error) {
-    if (process.env.DEBUG) {
-      console.log("# " + message)
-      if (error !== null && error !== undefined && error !== "") {
-        console.log(error)
-      }
-    }
-  }
-
-  /* Returns the current timestamp. */
-  function currentTimestamp() {
-    return (new Date).getTime()
-  }
-
-  /* Parses the given data, converting any strings to JSON objects. */
-  function parseIPFSObject(data) {
-    if (typeof data === "string") data = JSON.parse(data)
-    if (typeof data.Data === "string") data.Data = JSON.parse(data.Data)
-    if (typeof data.Link === "string") data.Link = JSON.parse(data.Link)
-    return data
-  }
-
-  /* Returns true if obj is contained in array, otherwise false. */
-  function containsObject(obj, array) {
-    for (var i = 0; i < array.length; i++) {
-      if (equal(obj, array[i])) return true
-      else if (i === array.length - 1) return false
-    }
-  }
-
-/********************************** PEERS ************************************/
-
-/**
- * This function adds the directory and uses the hash of this
- * application id to discover peers who are a part of this blockchain
- * application and attempt a connection to the peer for PubSub.
- */
-  function ipfsPeerDiscover() {
-    logger("ipfsPeerDiscover")
-
-    ipfs.add(ID_DIRECTORY, (err, res) => {
-      if (err) {
-        logger("error: ipfsPeerDiscover failed", err)
-      } else {
-        var hash = res[0].Hash
-        oboe("http://127.0.0.1:5001/api/v0/dht/findprovs\?arg\=" + hash).done((res) => {
-          if (res.Type === 4) {
-            var id = res.Responses[0].ID
-
-            if (id !== IPFS_ID) {
-              logger("ipfsPeerDiscover: " + id)
-
-              ipfsPeerResolve(id).then((path) => {
-                return ipfsGetData(path, "/pubgrok")
-              }).then((peerAddress) => {
-                console.log("Dialing " + peerAddress)
-
-                var peerInfo = {
-                  address: peerAddress,
-                  topics: ['block', 'transaction']
-                }
-
-                pubSub.connect(peerInfo)
-              })
-            }
-          }
-        }).fail(function() {
-          console.log("error: ipfsPeerDiscover failed to find peers")
-        })
-      }
-    })
-  }
-
-/**
- * This function takes a peer id as provided by IPFS to perform
- * an IPNS name resolution and acquire the path address to the data
- * publish by the specified peer.
- */
-  function ipfsPeerResolve(id) {
-    logger("ipfsPeerResolve")
-    return new Promise((resolve) => {
-      ipfs.name.resolve(id, null, (err, nameRes) => {
-        if (err) {
-          logger("ipfsPeerResolve error: " + id, err)
-        } else {
-          resolve(nameRes.Path)
-        }
-      })
-    })
-  }
-
-/**
- * This function is used to fetch data from the specified path and link
- * generally acquired from the IPNS system. The data is requested and
- * upon transmission completion, is combined and parsed into usable data.
- */
-  function ipfsGetData(path, link) {
-    logger("ipfsGetData")
-    return new Promise((resolve) => {
-      ipfs.cat(path + link, (err, catRes) => {
-        if (err) {
-          logger("ipfsGetData error: ipfs.cat failed", err)
-        } else {
-          var chunks = []
-
-          catRes.on("data", (chunk) => {
-            chunks.push(chunk)
-          })
-
-          catRes.on("end", () => {
-            if (chunks.length > 0) {
-              var data = chunks.join("")
-
-              if (validObject(data)) {
-                if (link === "/pubgrok") {
-                  resolve(data)
-                } else {
-                  if (typeof data === "string") data = JSON.parse(data)
-                  resolve(data)
-                }
-              }
-            }
-          })
-        }
-      })
-    })
-  }
-
-/**
- * This function adds all files in DIRECTORY to IPFS and publishes the multihash
- * reference of DIRECTORY using IPNS in order for peers to get files and necessary
- * application addresses, such as for subscribing in PubSub.
- */
-  function ipfsPeerPublish() {
-    logger("ipfsPeerPublish")
-    return new Promise((resolve) => {
-      ipfs.add(DIRECTORY, { recursive: true }, (err, addRes) => {
-        if (err) logger("error: ipfsPeerPublish failed", err)
-        else {
-          var hash = addRes.filter((path) => {
-            return path.Name === DIRECTORY
-          })[0].Hash
-
-          ipfs.name.publish(hash, null, (err, publishRes) => {
-            if (err) {
-              logger("ipfsPeerPublish error: ipfs.name.publish failed", err)
-            } else {
-              var name = publishRes.Name
-              logger("ipfsPeerPublish successful: " + name)
-              resolve(name)
-            }
-          })
-        }
-      })
-    })
-  }
-
-/*********************************** IPFS ************************************/
-
-  /* Returns the payload given the hash */
-  function ipfsGetPayload(hash) {
-    return new Promise((resolve) => {
-      ipfs.object.data(hash, { enc: "base58" }, (err, data) => {
-        if (err) {
-          logger("ipfsGetPayload error: ", err)
-        } else {
-          data = data.toString()
-          if (validObject(data)) {
-            if (typeof data === "string") data = JSON.parse(data)
-            if (typeof data.Links === "string") data.Links = JSON.parse(data.Links)
-            resolve(data)
-          }
-        } 
-      })
-    })
-  }
-
-  /* Returns the block given the hash */
-  function ipfsGetBlock(hash) {
-    return new Promise((resolve) => {
-      ipfs.object.data(hash, { enc: "base58" }, (err, data) => {
-        if (err) {
-          logger("ipfsGetPayload error: ", err)
-        } else {
-          data = data.toString()
-          if (validBlock(data)) {
-            data = parseIPFSObject(data)
-            resolve(data)
-          }
-        }
-      })
-    })
-  }
-
-  /* Returns the transaction given the hash */
-  function ipfsGetTransaction(hash) {
-    return new Promise((resolve) => {
-      ipfs.object.data(hash, { enc: "base58" }, (err, data) => {
-        if (err) {
-          logger("ipfsGetPayload error: ", err)
-        } else {
-          data = data.toString()
-          if (validTransactionPayload(data)) {
-            if (typeof data === "string") {
-              data = JSON.parse(data)
-            }
-            resolve(data)
-          }
-        }
-      })
-    })
-  }
-
-  /* Returns the first set bytes of the transaction payload given the hash */
-  function ipfsGetTransactionPayload(hash) {
-    return new Promise((resolve) => {
-      console.log(hash);
-      ipfs.object.data(hash, { enc: "base58" }, (err, data) => {
-        if (err) {
-          logger("ipfsGetPayload error: ", err)
-        } else {
-          data = data.toString()
-          if (validObject(data)) {
-            if (typeof data === "string") data = JSON.parse(data)
-            if (typeof data.Links === "string") data.Links = JSON.parse(data.Links)
-            resolve(data)
-          }
-        } 
-      })
-    })
-  }
-
-  /* Returns a hash to the given newPayload */
-  function ipfsWritePayload(newPayload) {
-    return new Promise((resolve) => {
-      ipfs.object.put(new Buffer(JSON.stringify(newPayload)), (err, res) => {
-        if (err) {
-          logger("error: ipfsWritePayload failed", err)
-        } else {
-          resolve(res.toJSON().Hash)
-        }
-      })
-    })
-  }
-
-  /* Returns a hash to the given newBlock */
-  function ipfsWriteBlock(newBlock) {
-    return new Promise((resolve) => {
-      ipfs.object.put(new Buffer(JSON.stringify(newBlock)), (err, res) => {
-        if (err) {
-          logger("error: ipfsWriteBlock failed", err)
-        } else {
-          resolve(res.toJSON().Hash)
-        }
-      })
-    })
-  }
-
-  /* Returns a chain array of custom blocks given the head blockHash of a chain */
-  function ipfsConstructChain(headBlockHash) {
-    logger("ipfsConstructChain")
-    return new Promise((resolve) => {
-      var newChain = []
-      var chained = true
-      var nextBlockHash = headBlockHash
-
-      async.whilst(
-        function() { 
-          return chained 
-        },
-        function(callback) {
-          ipfsGetBlock(nextBlockHash).then((newBlock) => {
-            nextBlock = parseIPFSObject(newBlock)
-            
-            var internalBlock = {
-              luck: nextBlock.Data.luck,
-              attestation: nextBlock.Data.attestation,
-              hash: nextBlockHash,
-              payload: nextBlock.Links[0].hash,
-              parent: "",
-              transactions: []
-            }
-
-            if (internalBlock.payload === "GENESIS") {
-              internalBlock.parent = "GENESIS"
-              chained = false
-              newChain.unshift(internalBlock)
-              callback(null, newChain)
-            } else {
-              ipfsGetPayload(internalBlock.payload).then((payload) => {
-                for (var i = 0; i < payload.Links.length; i++) {
-                  var elem = payload.Links[i]
-
-                  if (elem.name === "parent") {
-                    internalBlock.parent = elem.hash
-
-                    if (i === payload.Links.length - 1) {
-                      newChain.unshift(internalBlock)
-                      nextBlockHash = internalBlock.parent
-                      callback(null, newChain)
-                    }
-                  } else if (elem.name === "transaction" && validTransactionLink(elem)) {
-                    //ipfsGetTransactionPayload(elem.hash).then((txPayload) => {
-                      //elem.data = txPayload
-                      internalBlock.transactions.push(elem)
-
-                      if (i === payload.Links.length - 1) {
-                        newChain.unshift(internalBlock)
-                        nextBlockHash = internalBlock.parent
-                        callback(null, newChain)
-                      }
-                    //})
-                  }
-                }
-              })
-            }
-          })
-        },
-        function (err, newChain) {
-          err ? logger(err) : resolve(newChain)
-        }
-      )
-    })
-  }
-
-/********************************** LOCAL ************************************/
-
-  /* Writes the given newBlockHash to local storage */
-  function localWriteBlockHash(newBlockHash) {
-    return new Promise((resolve) => {
-      fs.writeFile(BLOCK_DIRECTORY, newBlockHash, (err) => {
-        if (err) {
-          logger("error: localWriteBlockHash failed", err)
-        } else {
-          resolve()
-        }
-      })
-    })
-  }
-
-  /* Writes the given newTransactionLink to local storage */
-  function localWriteTransactionLink(newTransactionLink) {
-    return new Promise((resolve) => {
-      if (!containsObject(newTransactionLink, transactions.Links)) {
-        transactions.Links.push(newTransactionLink)
-        fs.writeFile(TRANSACTIONS_DIRECTORY, JSON.stringify(transactions, null, 2), (err) => {
-          if (err) {
-            logger("error: localWriteTransactionLink failed", err)
-          } else {
-            resolve()
-          }
-        })
-      }
-    })
-  }
-
-  /* Writes the uncommited transactions to local storage */
-  function localWriteTransactions() {
-    fs.writeFile(TRANSACTIONS_DIRECTORY, JSON.stringify(transactions, null, 2), (err) => {
-      if (err) {
-        logger("error: localWriteTransactions failed", err)
-      } else {
-        logger("localWriteTransactions success")
-      }
-    })
-  }
-
-/*********************************** TEE *************************************/
-
-  /* Returns a secure quote from TEE */
-  function teeQuote(report) {
-    return { report: report, luck: report.luck }
-  }
-
-  /* Returns a secure report from TEE */
-  function teeReport(nonce, luck) {
-    return { nonce: nonce, luck: luck }
-  }
-
-  /* Returns secure report data from TEE */
-  function teeReportData(data) {
-    if (validObject(data)) {
-      if (data === "GENESIS") return { nonce: "GENESIS", luck: -1 }
-      else if (typeof data === "string") data = JSON.parse(data)
-      else return data
-    }
-  }
-
-  /* Returns true if TEE proof is valid */
-  function teeValidAttestation(attestation) {
-    if (!validObject(attestation)) return false
-    return true
-  }
-
-  /* Returns the trusted system time from TEE */
-  function teeGetTrustedTime() {
-    return currentTimestamp()
-  }
-
-  /* Returns a random value on request from TEE */
-  function teeGetRandom() {
-    var rand = Math.random()
-    while (rand === 0) rand = Math.random()
-    return 1 / rand
-  }
-
-  /* Returns the internal counter value from TEE */
-  function teeReadMonotonicCounter() {
-    return teeInternalCounter
-  }
-
-  /* Returns the monotonically incremented internal counter value from TEE */
-  function teeIncrementMonotonicCounter() {
-    teeInternalCounter++
-    return teeInternalCounter
-  }
-
-/********************************** CHAIN ************************************/
-
-  /* Returns true if obj is defined and has content */
-  function validObject(obj) {
-    if (obj === null || obj === undefined || obj === "") return false
-    else return true
-  }
-
-  /* Returns true if the array of transaction links contains our defined structure */
-  function validTransactionPayload(txp) {
-    if (!validObject(txp)) return false
-    else {
-      if (typeof txp === "string") txp = JSON.parse(txp)
-      return validObject(txp.Data)
-    }
-  }
-
-  /* Returns true if tx contains our defined structure of a transaction link
-   * AND is not in our list of uncommitted transactions or a spent transaction */
-  function validTransactionLink(tx) {
-    if (tx === null || tx === undefined) return false
-    else if (tx.name !== 'transaction') return false
-    else if (!validObject(tx.hash) || tx.hash === "GENESIS") return false
-    else {
-      if (typeof tx === "string") tx = JSON.parse(tx)
-
-      /* Returns false if tx is contained in current chain or transactions */
-      if (containsObject(tx, transactions.Links)) return false
-      else for (var i = 0; i < chain.length; i++) {
-        if (containsObject(tx, chain[i].transactions)) return false
-        else if (i === chain.length - 1) return true
-      }
-    }
-  }
-
-  /* Returns true if the array of transaction links contains our defined structure */
-  function validTransactions(txs) {
-    if (txs === null || txs === undefined) return false
-    else {
-      if (typeof txs === "string") txs = JSON.parse(txs)
-
-      if (txs.length === 0) return true
-      for (var i = 0; i < txs.length; i++) {
-        if (!validTransactionLink(txs[i])) return false
-        else if (i === txs.length - 1) return true
-      }
-    }
-  }
-
-  /* Returns true if block b contains our defined structure of a block */
-  function validBlock(b) {
-    if (!validObject(b)) return false
-    else if (typeof b !== "object" && typeof b !== "string") return false
-    else {
-      b = parseIPFSObject(b)
-      if (!validObject(b.Data)) return false
-      else if (!validObject(b.Data.luck)) return false
-      else if (!validObject(b.Data.attestation)) return false
-      else if (!validObject(b.Links) || b.Links.length !== 1) return false
-      else if (b.Links[0].name !== "payload") return false
-      else if (!validObject(b.Links[0].hash)) return false
-      else if (b.Links[0].hash !== "GENESIS" && b.Data.luck < 1) return false
-      else return true
-    }
-  }
-
-  /* Returns true if payload p contains our defined structure of a payload */
-  function validPayload(p) {
-    if (!validObject(p)) return false
-    else if (typeof p !== "object" && typeof p !== "string") return false
-    else {
-      if (typeof p === "string") p = JSON.parse(p)
-      if (typeof p.Links === "string") p.Links = JSON.parse(p.Links)
-
-      if (!validObject(p.Links)) return false
-      else if (p.Links.length < 2) return false
-      else {
-        var containsParent = false
-        for (var i = 0; i < p.Links.length; i++) {
-          if (p.Links[i].name === "parent") containsParent = true
-          if (i === p.Links.length - 1) return containsParent
-        }
-      }
-    }
-  }
-
-/********************************* ALGORITHM 4 *******************************/
-
-/**
- * This function is a TEE method that sets the state of roundBlock
- * and roundTime. The trusted time service teeGetTrustedTime() represents
- * a standard method provided as part of the TEE and is used as 
- * verification for ROUND_TIME when mining a new block.
- */
-  function teeProofOfLuckRound(thisBlock, thisChain) {
-    roundBlock = thisBlock
-    roundBlockParent = thisChain[0].parent
-    roundTime = teeGetTrustedTime()
-  }
-
-/**
- * This function is a TEE method that uses the given blockhash and
- * starts by checking the required ROUND_TIME has elapsed before
- * proceeding to generate a new luck value, using it to compute an
- * f(l) which determines the amount of time the TEE will sleep.
- * Upon return from sleeping f(l) duration, the function returns
- * a teeReport() that includes the luck value and nonce, which is
- * defined to be the given blockhash.
- */
-  function teeProofOfLuckMine(headerParentHash, callback) {
-    if ( headerParentHash !== blockHash
-      || (chain[0].parent !== roundBlockParent && chain[0].parent !== 'GENESIS')) {
-      callback("teeProofOfLuckMine error: header and parent mismatch", null)
-    } else {
-      var now = teeGetTrustedTime()
-
-      if (now < roundTime + ROUND_TIME) {
-        callback("teeProofOfLuckMine error: time", null)
-      }
-      else {
-        l = teeGetRandom()
-        var fl = (l / Number.MAX_VALUE) * ROUND_TIME
-        logger("teeSleep: " + fl + " seconds")
-
-        setTimeout(function() {
-          logger("returned from teeSleep")
-          var newCounter = teeReadMonotonicCounter()
-          var nonce = headerParentHash
-
-          if (counter !== newCounter) {
-            callback("teeProofOfLuckMine error: counter", null)
-          } else {
-            callback(null, teeReport(nonce, l))
-          }
-        }, fl * 1000)
-      }
-    } 
-  }
-
-/********************************* ALGORITHM 5 *******************************/
-
-/**
- * This function is responsible for constructing a new block with the
- * provided uncommitted transaction links, which can be empty.
- *
- * Starting with the uncommitted transaction links, the function
- * constructs a payload object, pushing the current blockhash, which
- * represents the parent, and writes it to IPFS to get the multihash.
- * The multihash is then provided as a nonce to the TEE method
- * teeProofOfLuckMine, which returns a proof that is appended to the
- * a newly constructed block in accordance to the blockchain protocol.
- * The block is then written to IPFS and the corresponding blockhash
- * (multihash) represents the new commit, which is returned to the
- * calling function.
- */
-  function commit(newTransactionLinks) {
-    logger("commit")
-    return new Promise((resolve) => {
-
-      var newBlockPayload = {
-        Data: "",
-        Links: newTransactionLinks.slice()
-      }
-
-      newBlockPayload.Links.push({
-        name: "parent",
-        hash: blockHash
-      })
-
-      ipfsWritePayload(newBlockPayload).then((hash) => {
-
-        teeProofOfLuckMine(blockHash, (err, proof) => {
-          if (err) {
-            logger(err)
-          } else {
-            var newBlock = {
-              Data : {
-                luck: proof.luck,
-                attestation: proof
-              },
-              Links: [{
-                name: "payload",
-                hash: hash
-              }]
-            }
-
-            ipfsWriteBlock(newBlock).then((newBlockHash) => {
-              console.log("New Commit: " + newBlockHash)
-
-              transactions.Links = []
-              localWriteTransactions()
-              resolve(newBlockHash)
-            })
-          }
-        })
-      }).catch((err) => {
-        logger("Commit failed", err)
-      })
-    })
-  }
-
-/********************************* ALGORITHM 6 *******************************/
-
-/**
- * This function computes the total luck value of the given chain by
- * iterating through each block and invoking the TEE method teeReportData()
- * to get the trusted luck value and summing to a running total. After
- * all blocks are visited, the function returns the total luck value
- * of the given blockchain.
- */
-  function luck(thisChain) {
-    var totalLuck = 0
-    for (var i = 0; i < thisChain.length; i++) {
-
-      var report = teeReportData(thisChain[i].attestation)
-
-      if (thisChain[i].payload !== "GENESIS" && report.luck >= 1) {
-        totalLuck += report.luck
-      }
-
-      if (i === thisChain.length - 1) {
-        return totalLuck
-      }
-    }
-  }
-
-/********************************* ALGORITHM 7 *******************************/
-
-/**
- * This function verifies the validity the given chain by confirming
- * it is a object with correct parameters (parent, attestation, payload,
- * length) and verifying that the blockchain data includes a valid 
- * attestation by generating a report from the TEE. If every block
- * in the provided chain follows our defined structure, then and only then
- * does the method return true; otherwise, it returns false.
- */
-  function validChain(newChain) {
-    if (!validObject(newChain)) {
-      return false
-    }
-    else {
-      if (typeof newChain === "string") {
-        newChain = JSON.parse(newChain)
-      }
-
-      var previousBlockHash = "GENESIS"
-      var testChain = newChain.slice()
-
-      for (var i = 0; i < testChain.length; i++) {
-        var testBlock = testChain[i]
-        var report = teeReportData(testBlock.attestation)
-
-        if (!validObject(testBlock)) {
-          return false
-        } else if (testBlock.parent !== previousBlockHash) {
-          return false
-        } else if (!teeValidAttestation(testBlock.attestation)) {
-          return false
-        } else if (testBlock.payload !== "GENESIS" && report.nonce !== testBlock.parent) {
-          return false
-        } else if (i === testChain.length - 1) {
-          return true
-        }
-        
-        previousBlockHash = testBlock.hash
-      }
-    }
-  }
-
-/********************************* ALGORITHM 8 *******************************/
-
-/**
- * This function invokes teeProofOfLuckRound() in Algorithm 4 which
- * sets state on our roundBlock and roundTime, then invokes our 
- * resetCallback() function to construct a new commit and publish
- * the candidate block to peers.
- */
-  function newRound(newBlock, newChain, selfInvocation) {
-    logger("newRound")
-    teeProofOfLuckRound(newBlock, newChain)
-    resetCallback(selfInvocation)
-  }
-
-/**
- * This function handles all PubSub requests that are blocks by
- * parsing the blockhash, a Buffer, and verifying the reconstructed
- * block referenced by the blockhash is of valid format as defined by
- * the blockchain protocol. It will then proceed to reconstruct the
- * entire blockchain referenced by the provided block head and
- * determine if this chain is luckier than our application's existing
- * chain.
- *
- * If the new chain is determined to be luckier, it will write the
- * new blockhash to local state and to local storage, then proceed
- * to filter any overlapping transactions between the new blockchain
- * and list of uncommited transactions.
- *
- * Only after all of these procedures succeeds will the protocol
- * proceed to:
- *   1. Publish the valid and winning blockhash to connected peers.
- *   2. Proceed to start a newRound() of mining with the newBlock
- *      and newChain reference, if the roundBlock is not defined or
- *      if the parent hash of the new blockchain does not match the
- *      roundBlock's parent hash.
- *
- * Lastly, intervalUpdate is set to true if the pubSubBlock()
- * invocation came from a peer. In this case, as the block head
- * update was successful, we will not invoke the resetCallback()
- * method for this interval, as part of the blockchain protocol.
- */
-  function pubSubBlock(newBlockHash, selfInvocation) {
-    logger("pubSubBlock - " + newBlockHash.toString())
-
-    newBlockHash = newBlockHash.toString()
-    ipfsGetBlock(newBlockHash).then((newBlock) => {
-
-      /* Skip previously considered block references */
-      if (!containsObject(newBlockHash, seenBlockHashes) && !equal(newBlock, block)) {
-
-        ipfsConstructChain(newBlockHash).then((newChain) => {
-          logger("pubSub: constructed chain from newBlockHash")
-
-          seenBlockHashes.push(newBlockHash)
-
-          /* Check if newChain is valid and luckier than our current chain */
-          if (validChain(newChain) && luck(newChain) > luck(chain)) {
-            logger("pubSub: found luckier block")
-
-            ipfsWriteBlock(newBlock).then((newBlockHash) => {
-              if (!selfInvocation) {
-                console.log("PubSub: Luckier block accepted from peer, writing block...")
-              } else {
-                console.log("PubSub: Luckier block accepted, writing block...")
-              }
-
-              localWriteBlockHash(newBlockHash).then(() => {
-                /* Update uncommitted transactions for new chain */
-                for (var i = 0; i < newChain.length; i++) {
-
-                  var txs = newChain[i].transactions
-
-                  transactions.Links = _.reject(transactions.Links, function(obj) {
-                    return _.find(txs, { luck: obj.luck })
-                  })
-
-                  if (i === newChain.length - 1) {
-                    console.log("PubSub: Block update successful")
-
-                    /* Update local uncomitted transaction state */
-                    localWriteTransactions()
-
-                    /* Update local blockchain state with new block */
-                    chain = newChain
-                    block = newBlock
-                    blockHash = newBlockHash
-
-                    /* Set the update for this interval to true */
-                    if (!selfInvocation) {
-                      intervalUpdate = true
-                    }
-
-                    /* Publish it to peers */
-                    pubSub.publish('block', newBlockHash)
-
-                    /* Send via socket to clients */
-                    io.emit('blockResult', chain[chain.length - 1]);
-                    
-                    /* Start a new round of mining */
-                    if (roundBlock === null || roundBlock === undefined) {
-                      newRound(newBlock, newChain, selfInvocation)
-                    } else if (newChain[0].parent != roundBlockParent) {
-                      newRound(newBlock, newChain, selfInvocation)
-                    }
-                  }
-                }
-              })
-            })
-          }
-        })
-      }
-    })
-  }
-  
-/**
- * This function handles all PubSub requests that are transactions
- * by parsing the transaction link, a Buffer, verifying it is of valid
- * format as defined by our blockchain protocol, and proceeds to:
- *   1. Publish the valid transaction link to connect peers.
- *   2. Write the valid transaction link to the local list of
- *      uncommitted transactions and to local storage should the
- *      client disconnect or fail.
- */
-  function pubSubTransaction(link) {
-    logger("pubSub: transaction - " + link.toString())
-
-    var txLink = JSON.parse(link.toString())
-
-    /* Verify transaction link structure is valid */
-    if (validTransactionLink(txLink)) {
-
-      ipfsGetTransaction(txLink.hash).then((txPayload) => {
-        if (validTransactionPayload(txPayload)) {
-
-          /* Publish it to peers */
-          pubSub.publish('transaction', link.toString())
-
-          /* Write it to local state */
-          localWriteTransactionLink(txLink).then(() => {
-            console.log("pubSub: added transaction link")
-          })
-        }
-      })
-    }
-  }
-
-/**
- * This function invokes commit() with the current list of uncommited
- * transactions, which can be empty, to construct a new commit (block).
- * The blockhash is then published as a challenger for the new block head.
- */
-  function resetCallback(selfInvocation) {
-    var newTransactionLinks = transactions.Links.slice()
-    commit(newTransactionLinks).then((newBlockHash) => {
-      pubSubBlock(new Buffer(newBlockHash), selfInvocation)
-    })
-  }
-
-/**
- * Functions as the heartbeat of the blockchain, invoking round update 
- * after successful initialization, calling resetCallback() if a block
- * update has not already occured during this ROUND_TIME.
- */
-  var roundInterval = new cron("*/" + ROUND_TIME + " * * * * *", function() {
-    if (CRON_ON) {
-      printInterval()
-
-      io.emit('peersResult', pubSub.getPeers())
-      
-      /* Discover peers if there are currently no peer connections. */
-      if (pubSub.getPeers().length === 0) ipfsPeerDiscover()
-
-      if (!intervalUpdate) {
-        resetCallback(true)
-      }
-      intervalUpdate = false
-    }
-  }, null, true)
-
-/********************************** SOCKET ***********************************/
-
-  io.on('connection', function (socket) {
-    console.log('Client connected')
-    
-    socket.on('peers', function () {
-      socket.emit('peersResult', pubSub.getPeers())
-    })
-
-    socket.on('chain', function () {
-      socket.emit('chainResult', chain)
-    })
-  })
-  
-/********************************** NETWORK **********************************/
-
-  node.post("/tx", function(req, res, next) {
-    if (req.body !== undefined || req.body !== null) {
-
-      var type = req.body.type;
-
-      if (type == "address") {
-        hash = req.body.tx.Data;
-        if (isIPFS.multihash(hash)) {
-          logger('/tx payload hash: ' + hash)
-
-          var txLink = {
-            name: "transaction",
-            hash: hash
-          }
-
-          if (!validTransactionLink(txLink)) {
-            res.status(400).json({
-              error: "invalid"
-            })
-          }
-          else {
-            /* Publish it to peers */
-            pubSub.publish('transaction', new Buffer(JSON.stringify(txLink)))
-
-            /* Write it locally */
-            localWriteTransactionLink(txLink).then(() => {
-              console.log("/tx request successful")
-
-              res.status(200).json({
-                message: "success",
-                datetime: currentTimestamp()
-              })
-            })
-          }
-        } else {
-          res.status(400).json({ error: "invalid" })
-        }
-      }
-
-      if (type == "data") {
-        var tx = req.body.tx
-
-        if (validTransactionPayload(tx)) {
-          console.log("/tx request received")
-
-          ipfsWritePayload(tx).then((hash) => {
-            logger('/tx payload hash: ' + hash)
-
-            var txLink = {
-              name: "transaction",
-              hash: hash
-            }
-
-            if (!validTransactionLink(txLink)) {
-              res.status(400).json({
-                error: "invalid"
-              })
-            }
-            else {
-              /* Publish it to peers */
-              pubSub.publish('transaction', new Buffer(JSON.stringify(txLink)))
-
-              /* Write it locally */
-              localWriteTransactionLink(txLink).then(() => {
-                console.log("/tx request successful")
-
-                res.status(200).json({
-                  message: "success",
-                  datetime: currentTimestamp()
-                })
-              })
-            }
-          })
-        } else {
-          res.status(400).json({ error: "invalid" })
-        }
-      }
-
-    } else {
-      res.status(400).json({ error: "invalid" })
-    }
-  })
-
-  node.get("/chain", function (req, res, next) {
-    res.status(200).json({
-      chain: chain
-    })
-  })
-
-  node.get("/peers", function (req, res, next) {
-    res.status(200).json({
-      peers: pubSub.getPeers()
-    })
-  })
-
-  node.get("*", function (req, res, next) {
-    res.render("template")
-  })
-
-/*****************************************************************************/
-
+var bs58 = require('bs58')
+var dagPB = require('ipld-dag-pb')
+var enclave = require('./enclave')
+var FiberUtils = require('./fiber-utils')
+var clone = require('clone')
+
+var enclaveInstance = null
+
+var DAGNodeCreateSync = FiberUtils.wrap(dagPB.DAGNode.create)
+
+var ROUND_TIME = 10 // seconds
+var BLOCKCHAIN_ID = "lucky-chain-0.1"
+
+var DEFAULT_OPTIONS = {
+  clientPort: 8000,
+  ipfsOptions: {
+    host: "localhost",
+    port: "5001",
+    protocol: "http"
+  },
+  blockchainId: BLOCKCHAIN_ID,
+  peersUpdateInterval: 15 // s
 }
 
-module.exports = blockchain
+class Node {
+  constructor(blockchain, object, address) {
+    this.blockchain = blockchain
+    this.object = {
+      Data: object.Data || object.data || "",
+      Links: object.Links || object.links || []
+    }
+
+    if (this.object.Data instanceof Buffer) {
+      this.object.Data = this.object.Data.toString()
+    }
+
+    this.object.Links = this.object.Links.map((link) => {
+      return {
+        Name: link.Name || link.name || (() => {throw new Error("Link without a name")})(),
+        Hash: link.Hash || link.hash || link.multihash || (() => {throw new Error("Link without a hash")})(),
+        Size: _.isFinite(link.Size) ? link.Size : _.isFinite(link.Tsize) ? link.Tsize : _.isFinite(link.size) ? link.size : (() => {throw new Error("Link without a size")})()
+      }
+    })
+
+    var dagNode = DAGNodeCreateSync(this.object.Data, this.object.Links, 'sha2-256')
+    this._size = dagNode.serialized.length
+
+    // It can be null if not specified.
+    this.address = address || null
+
+    if (this.address) {
+      assert(dagNode.toJSON().multihash === this.address, `Serialized node's hash '${dagNode.toJSON().multihash}' does not match provided address '${this.address}`)
+    }
+  }
+
+  getLinks(name) {
+    return this.object.Links.filter((link) => {
+      return link.Name === name
+    })
+  }
+
+  toJSON() {
+    return clone(this.object)
+  }
+
+  getAddress() {
+    if (!this.address) throw new Error("Address not known")
+
+    return this.address
+  }
+
+  getBlockSize() {
+    return this._size
+  }
+
+  getCumulativeSize() {
+    var recursiveSize = 0
+    for (var link of this.object.Links) {
+      recursiveSize += link.Size
+    }
+    return this.getBlockSize() + recursiveSize
+  }
+}
+
+class Payload extends Node {
+  constructor(blockchain, object, address) {
+    super(blockchain, object, address)
+
+    var parentLinks = this.getLinks("parent")
+    if (parentLinks.length > 1) {
+      // Genesis block has zero parent links.
+      throw new Error("At most one parent link is allowed")
+    }
+    if (parentLinks.length === 0) {
+      if (this.object.Data !== "GENESIS") {
+        throw new Error(`Genesis payload should contain data 'GENESIS', but it contains: ${this.object.Data}`)
+      }
+    }
+    else {
+      if (this.object.Data !== "") {
+        throw new Error(`Payload should not contain data, but it does: ${this.object.Data}`)
+      }
+    }
+
+    for (var link of this.object.Links) {
+      if (link.Name !== "transaction" && link.Name !== "parent") {
+        throw new Error(`Invalid link: ${link.Name}`)
+      }
+    }
+
+    this._transactionsLinks = this.getLinks("transaction")
+
+    if (parentLinks.length) {
+      this._parentLink = parentLinks[0].Hash
+    }
+    else {
+      // Genesis block.
+      this._parentLink = null
+    }
+  }
+
+  getTransactionsLinks() {
+    return this._transactionsLinks
+  }
+
+  getParentLink() {
+    return this._parentLink
+  }
+
+  getParent() {
+    var parentLink = this.getParentLink()
+    if (parentLink) {
+      return this.blockchain.getBlock(parentLink)
+    }
+    else {
+      // Genesis block.
+      return null
+    }
+  }
+}
+
+class Block extends Node {
+  // Constructor validates the block and its whole chain and throws an exception if anything is invalid.
+  constructor(blockchain, object, address) {
+    super(blockchain, object, address)
+
+    if (this.object.Links.length !== 1 || this.object.Links[0].Name !== "payload") {
+      throw new Error("Exactly one link, payload, is required")
+    }
+
+    this.data = JSON.parse(this.object.Data)
+
+    if (!_.isFinite(this.data.Luck) || this.data.Luck < 0.0 || this.data.Luck >= 1.0) {
+      throw new Error(`Invalid luck: ${this.data.Luck}`)
+    }
+    if (!_.isObject(this.data.Proof) || !this.data.Proof.Attestation || !this.data.Proof.Quote) {
+      throw new Error("Invalid proof")
+    }
+    if (!_.isString(this.data.Time)) {
+      throw new Error("Invalid timestamp")
+    }
+
+    this.data.Proof.Attestation = new Uint8Array(bs58.decode(this.data.Proof.Attestation)).buffer
+    this.data.Proof.Quote = new Uint8Array(bs58.decode(this.data.Proof.Quote)).buffer
+    this.data.Time = new Date(this.data.Time)
+
+    if (!enclaveInstance.teeValidateRemoteAttestation(this.data.Proof.Quote, this.data.Proof.Attestation)) {
+      throw new Error("Invalid attestation")
+    }
+
+    var nonce = enclaveInstance.teeProofOfLuckNonce(this.data.Proof.Quote)
+
+    if (nonce.luck !== this.data.Luck) {
+      throw new Error("Proof's luck does not match block's luck")
+    }
+    if (nonce.hash !== this.getPayloadLink()) {
+      throw new Error("Proof's payload does not match block's payload")
+    }
+
+    // Creating payload and parent objects validates them as well.
+    // This happens recursively over the whole chain. Because objects are cached we do not
+    // have to necessary recompute and validate the whole chain again and again.
+    this.getPayload()
+    this.getParent()
+
+    this.chainLuck = this._computeChainLuck()
+  }
+
+  getPayloadLink() {
+    return this.object.Links[0].Hash
+  }
+
+  getPayload() {
+    return this.blockchain.getPayload(this.getPayloadLink())
+  }
+
+  getLuck() {
+    return this.data.Luck
+  }
+
+  getTimestamp() {
+    return this.data.Time
+  }
+
+  getMinerId() {
+    return this.data.MinerId
+  }
+
+  getParentLink() {
+    return this.getPayload().getParentLink()
+  }
+
+  getParent() {
+    return this.getPayload().getParent()
+  }
+
+  _computeChainLuck() {
+    var luck = this.getLuck()
+    var parent = this.getParent()
+    if (parent) {
+      luck += parent.getChainLuck()
+    }
+    return luck
+  }
+
+  getChainLuck() {
+    return this.chainLuck
+  }
+
+  pinChain(previousLatestBlock) {
+    FiberUtils.synchronize(this.blockchain, 'pinChain', () => {
+      var previousChainIDs = []
+      while (previousLatestBlock) {
+        previousChainIDs.push(previousLatestBlock.address)
+        previousChainIDs.push(previousLatestBlock.getPayloadLink())
+        previousLatestBlock = previousLatestBlock.getParent()
+      }
+
+      var newChainIDs = []
+      var block = this
+      while (block) {
+        newChainIDs.push(block.address)
+        newChainIDs.push(block.getPayloadLink())
+        block = block.getParent()
+      }
+
+      for (var address of _.difference(newChainIDs, previousChainIDs)) {
+        this.blockchain.ipfs.pin.addSync(address, {recursive: false})
+      }
+
+      for (var address of _.difference(previousChainIDs, newChainIDs)) {
+        this.blockchain.ipfs.pin.rmSync(address, {recursive: false})
+      }
+    })
+  }
+
+  // Records in IPNS are stored signed with our key, so they cannot be faked, but they could
+  // be reverted to old values. We use this as an optimization anyway, to better know where to
+  // start initially, but it is not really needed. In the worst case a peer will quickly learns
+  // about new latest block.
+  rememberInIPNS() {
+    // TODO: Implement. Store current block into IPNS.
+  }
+
+  toString() {
+    return `${this.getAddress()} (parent ${this.getParentLink()}, luck ${this.getLuck()}, time ${this.getTimestamp()}, miner ${this.getMinerId()}, transactions ${this.getPayload().getTransactionsLinks().length})`
+  }
+}
+
+class Blockchain {
+  constructor(node, options) {
+    this.node = node
+    this.options = _.defaults(options || {}, DEFAULT_OPTIONS)
+
+    this._cache = new Map()
+
+    this.ipfs = new IPFS(this.options.ipfsOptions)
+
+    this.ipfs.idSync = FiberUtils.wrap(this.ipfs.id)
+    this.ipfs.object.getSync = FiberUtils.wrap(this.ipfs.object.get)
+    this.ipfs.object.putSync = FiberUtils.wrap(this.ipfs.object.put)
+    this.ipfs.object.statSync = FiberUtils.wrap(this.ipfs.object.stat)
+    this.ipfs.pin.addSync = FiberUtils.wrap(this.ipfs.pin.add)
+    this.ipfs.pin.rmSync = FiberUtils.wrap(this.ipfs.pin.rm)
+    this.ipfs.pubsub.pubSync = FiberUtils.wrap(this.ipfs.pubsub.pub)
+    this.ipfs.pubsub.subSync = FiberUtils.wrap(this.ipfs.pubsub.sub)
+    this.ipfs.pubsub.peersSync = FiberUtils.wrap(this.ipfs.pubsub.peers)
+    this.ipfs.name.publishSync = FiberUtils.wrap(this.ipfs.name.publish)
+    this.ipfs.name.resolveSync = FiberUtils.wrap(this.ipfs.name.resolve)
+
+    this.peers = new Map()
+
+    this._pendingTransactions = []
+    this._roundBlock = null
+    this._roundCallback = null
+    // Latest block represents currently known best chain.
+    // It can be different from round block if it shares the same parent.
+    this._latestBlock = null
+    this._miningResult = null
+  }
+
+  getPayload(address) {
+    if (!this._cache.has(address)) {
+      var node = this._getNode(address)
+      var payload = new Payload(this, node, address)
+
+      // We check again because fiber could yield in meantime.
+      if (!this._cache.has(address)) {
+        this._cache.set(address, payload)
+      }
+    }
+
+    var payload = this._cache.get(address)
+    assert(payload instanceof Payload)
+    return payload
+  }
+
+  getBlock(address) {
+    if (!this._cache.has(address)) {
+      var node = this._getNode(address)
+      var block = new Block(this, node, address)
+
+      // We check again because fiber could yield in meantime.
+      if (!this._cache.has(address)) {
+        this._cache.set(address, block)
+      }
+    }
+
+    var block = this._cache.get(address)
+    assert(block instanceof Block)
+    return block
+  }
+
+  _getNode(address) {
+    return this.ipfs.object.getSync(address).toJSON()
+  }
+
+  start() {
+    this._getIPFSInfo()
+    this._restoreFromIPNS()
+    this._startPubSub()
+    this._startWebInterface()
+    this._startMining()
+  }
+
+  getPeers() {
+    return Array.from(this.peers.values())
+  }
+
+  getChain() {
+    var chain = []
+    var block = this._latestBlock
+    while (block) {
+      var json = block.toJSON()
+      json.Hash = block.address
+      json.Data = JSON.parse(json.Data)
+      json.Links[0].Content = block.getPayload().toJSON()
+      chain.push(json)
+      block = block.getParent()
+    }
+    return chain
+  }
+
+  getPendingTransactions() {
+    return this._pendingTransactions
+  }
+
+  getSGXVersion() {
+    // TODO: We should return SGX version (version of platform, enclave, etc.). And null for mock.
+    return null
+  }
+
+  _getIPFSInfo() {
+    this.ipfsInfo = this.ipfs.idSync()
+    console.log("IPFS info", this.ipfsInfo)
+  }
+
+  _startWebInterface() {
+    var server = this.node.listen(this.options.clientPort, () => {
+      console.log("Web interface listening", server.address())
+    })
+    this.socketIo = socketIo(server)
+
+    this.socketIo.on("connection", (socket) => {
+      console.log("HTTP client connected")
+
+      socket.on('id', FiberUtils.in(() => {
+        socket.emit('idResult', this.options.blockchainId)
+      }, this, this._handleErrors))
+
+      socket.on('sgx', FiberUtils.in(() => {
+        socket.emit('sgxResult', this.getSGXVersion())
+      }, this, this._handleErrors))
+
+      socket.on('peers', FiberUtils.in(() => {
+        socket.emit('peersResult', this.getPeers())
+      }, this, this._handleErrors))
+
+      socket.on('chain', FiberUtils.in(() => {
+        socket.emit('chainResult', this.getChain())
+      }, this, this._handleErrors))
+
+      socket.on('pending', FiberUtils.in(() => {
+        socket.emit('pendingResult', this.getPendingTransactions())
+      }, this, this._handleErrors))
+    })
+
+    this.node.get("/api/v0/id", FiberUtils.in((req, res, next) => {
+      res.status(200).json({
+        id: this.options.blockchainId
+      })
+    }, this, this._handleErrors))
+
+    this.node.get("/api/v0/sgx", FiberUtils.in((req, res, next) => {
+      res.status(200).json({
+        sgx: this.getSGXVersion()
+      })
+    }, this, this._handleErrors))
+
+    this.node.get("/api/v0/peers", FiberUtils.in((req, res, next) => {
+      res.status(200).json({
+        peers: this.getPeers()
+      })
+    }, this, this._handleErrors))
+
+    this.node.get("/api/v0/chain", FiberUtils.in((req, res, next) => {
+      res.status(200).json({
+        chain: this.getChain()
+      })
+    }, this, this._handleErrors))
+
+    this.node.get("/api/v0/pending", FiberUtils.in((req, res, next) => {
+      res.status(200).json({
+        pending: this.getPendingTransactions()
+      })
+    }, this, this._handleErrors))
+
+    this.node.post("/api/v0/tx", FiberUtils.in((req, res, next) => {
+      if (!_.isObject(req.body) || !req.body.type || !req.body.data || !_.isString(req.body.data)) {
+        res.status(400).json({error: "invalid"})
+        return
+      }
+
+      var type = req.body.type
+      if (type === "address") {
+        this._onNewTransactionAddress(req.body.data, res)
+      }
+      else if (type === "data") {
+        this._onNewTransactionData(req.body.data, res)
+      }
+      else {
+        res.status(400).json({error: "invalid"})
+      }
+    }, this, this._handleErrors))
+
+    this.node.get("*", (req, res, next) => {
+      res.render("template")
+    })
+  }
+
+  getTransactionsTopic() {
+    return `${this.options.blockchainId}/transactions`
+  }
+
+  getBlocksTopic() {
+    return `${this.options.blockchainId}/blocks`
+  }
+
+  _startPubSub() {
+    var transactions = this.ipfs.pubsub.subSync(this.getTransactionsTopic(), {discover: true})
+    transactions.on('data', FiberUtils.in((obj) => {
+      if (obj.data) {
+        this._onTransaction(obj.data.toString('utf8'))
+      }
+    }, this, this._handleErrors))
+    var blocks = this.ipfs.pubsub.subSync(this.getBlocksTopic(), {discover: true})
+    blocks.on('data', FiberUtils.in((obj) => {
+      if (obj.data) {
+        this._onBlock(obj.data.toString('utf8'))
+      }
+    }, this, this._handleErrors))
+
+    setInterval(FiberUtils.in(() => {
+      this._updatePeers()
+    }, this, this._handleErrors), this.options.peersUpdateInterval * 1000) // ms
+  }
+
+  _onTransaction(transactionAddress) {
+    if (this.isPendingTransaction(transactionAddress)) {
+      return
+    }
+
+    var stat = this.ipfs.object.statSync(transactionAddress)
+
+    // We check again because fiber could yield in meantime.
+    if (this.isPendingTransaction(transactionAddress)) {
+      return
+    }
+
+    console.log(`New pending transaction: ${transactionAddress}`)
+    this._pendingTransactions.push({
+      Name: "transaction",
+      Hash: transactionAddress,
+      Size: stat.BlockSize
+    })
+
+    // TODO: Pub/sub should broadcast this transaction only now.
+    //       Currently pub/sub broadcasts every transaction fully to everyone. We want that only if a
+    //       transaction has been processed to the end here, this node broadcasts it further. Eg., it could be
+    //       that the transaction has been already known and so it has already broadcast it before, so it does not
+    //       have to do it now again.
+    //       See: https://github.com/ipfs/go-ipfs/issues/3741
+
+    this.socketIo.emit('pendingResult', this.getPendingTransactions())
+  }
+
+  _onBlock(blockAddress) {
+    // Block constructor also validates the whole chain.
+    var block = this.getBlock(blockAddress)
+
+    // getBlock can yield, but it does not matter, we can still compare.
+    if (this._latestBlock && block.getChainLuck() <= this._latestBlock.getChainLuck()) {
+      return
+    }
+
+    assert(!this._roundBlock || !this._latestBlock || this._latestBlock.getParentLink() === this._roundBlock.getParentLink(), "Latest's block parent link is not the same as round's block parent link")
+
+    // We have already mined a block and are sleeping before releasing it. It is strange that we would get a block
+    // extending current chain before we released our block, if our block is luckier than the block we just received.
+    // So we check for this special case and ignore such blocks, because once we release our block the chain for everyone
+    // will switch to this our chain anyway. If we were not ignore it, this block would trigger a new round and our mining
+    // of luckier block would be terminated.
+    if (this._roundBlock && this._latestBlock && this._miningResult && _.isFinite(this._miningResult.luck) && block.getParent() && block.getParent().getParentLink() === this._roundBlock.getParentLink() && (block.getLuck() + block.getParent().getLuck() < this._miningResult.luck + this._latestBlock.getLuck())) {
+      console.log(`Received new luckier latest block out of order, ignoring: ${block}`)
+      return
+    }
+
+    console.log(`New latest block: ${block}`)
+
+    var previousLatestBlock = this._latestBlock
+    this._latestBlock = block
+
+    if (this._roundBlock) {
+      // If during a mining on a round block we get a better chain, we do not switch to mining on this better chain
+      // if the parent of both blocks is the same. This can happen if the chain was prolonged and we start mining
+      // on it, but then a delayed best chain from the previous round arrives. Chains are equal up to the last block.
+      if (this._latestBlock.getParentLink() !== this._roundBlock.getParentLink()) {
+        this._newRound(block)
+      }
+    }
+    else {
+      this._newRound(block)
+    }
+
+    // _newRound could yield, so we make sure we still have the same latest block.
+    if (this._latestBlock !== block) {
+      return
+    }
+
+    // TODO: Pub/sub should broadcast this block only now.
+    //       Currently pub/sub broadcasts every block fully to everyone. We want that only if a block has been
+    //       processed to the end here, this node broadcasts it further. Eg., it could be that the block represents
+    //       a chain which is invalid or less lucky than currently known best (latest) chain.
+    //       See: https://github.com/ipfs/go-ipfs/issues/3741
+
+   this._latestBlock.pinChain(previousLatestBlock)
+
+    // We could yield, so we compare.
+    if (this._latestBlock !== block) {
+      return
+    }
+
+    this._latestBlock.rememberInIPNS()
+
+    this.socketIo.emit('chainResult', this.getChain())
+  }
+
+  _updatePeers() {
+    var transactionsPeers = this.ipfs.pubsub.peersSync(this.getTransactionsTopic())
+    var blocksPeers = this.ipfs.pubsub.peersSync(this.getBlocksTopic())
+
+    var peers = _.union(transactionsPeers, blocksPeers)
+
+    var added = 0
+    var removed = 0
+
+    for (var peer of peers) {
+      if (!this.peers.has(peer)) {
+        this.peers.set(peer, this.ipfs.idSync(peer))
+        added++
+      }
+    }
+
+    for (var peer of this.peers.keys()) {
+      if (_.indexOf(peers, peer) === -1) {
+        this.peers.delete(peer)
+        removed++
+      }
+    }
+
+    if (added || removed) {
+      console.log(`Peers updated: ${added} added, ${removed} removed, ${this.peers.size} total`)
+      this.socketIo.emit('peersResult', this.getPeers())
+    }
+  }
+
+  /**
+   * Starts a new round. Discards the previous round and resets the interval
+   * for committing pending transactions.
+   */
+  _newRound(roundBlock) {
+    // This can potentially be called quickly one after the other, if many new latest block are arriving.
+    // Because teeProofOfLuckRoundSync yields, we want to assure is consistent and calls to _newRound are queued.
+    FiberUtils.synchronize(this, '_newRound', () => {
+      if (this._roundCallback) {
+        clearTimeout(this._roundCallback)
+        this._roundCallback = null
+      }
+      if (this._miningResult) {
+        this._miningResult.cancel()
+        this._miningResult = null
+      }
+      enclaveInstance.teeProofOfLuckRoundSync(roundBlock.getPayload().toJSON())
+      this._roundBlock = roundBlock
+      this._roundCallback = setTimeout(FiberUtils.in(() => {
+        this._commitPendingTransactions()
+      }, this, this._handleErrors), ROUND_TIME * 1000) // ms
+    })
+  }
+
+  _commitPendingTransactions() {
+    // This should be called only every ROUND_TIME seconds, but just to be sure no two calls happen
+    // in parallel we are making it a critical section. This one prematurely ends when mining is canceled,
+    // so there should not really be any calls queued.
+    FiberUtils.synchronize(this, '_commitPendingTransactions', () => {
+      var newTransactions = this._pendingTransactions
+      this._pendingTransactions = []
+
+      // We store it into a variable now, because it could change while we are committing pending transactions.
+      var latestBlock = this._latestBlock
+      var roundBlock = this._roundBlock
+
+      var newPayloadObject = {
+        Data: "",
+        Links: newTransactions
+      }
+
+      if (latestBlock) {
+        newPayloadObject.Links.push({
+          Name: "parent",
+          Hash: latestBlock.getAddress(),
+          Size: latestBlock.getCumulativeSize()
+        })
+      }
+      else {
+        // To make sure an object has at least some data.
+        // We cannot store an object with no data and no links.
+        newPayloadObject.Data = "GENESIS"
+      }
+
+      var newPayload = new Payload(this, newPayloadObject)
+
+      var newPayloadResponse = this.ipfs.object.putSync(newPayload.toJSON())
+      var newPayloadAddress = newPayloadResponse.toJSON().multihash
+
+      newPayload.address = newPayloadAddress
+
+      this._cache.set(newPayloadAddress, newPayload)
+
+      var result = null
+
+      // We have to make sure round block does not change during mining.
+      FiberUtils.synchronize(this, '_newRound', () => {
+        assert(!this._miningResult, "this._miningResult is set")
+
+        // Round has changed since the start (code can yield). We cannot mine anymore within this round.
+        if ((roundBlock && roundBlock.getParentLink()) !== (this._roundBlock && this._roundBlock.getParentLink())) {
+          return
+        }
+
+        result = enclaveInstance.teeProofOfLuckMineSync(newPayload.toJSON(), latestBlock ? latestBlock.toJSON() : null, latestBlock ? latestBlock.getPayload().toJSON() : null)
+      })
+
+      if (!result) {
+        // TODO: What should we do with our pending transactions? What if they were not included in the winning block?
+        //       Should we try to put them back to be mined with the next block? But how to prevent/detect duplicates
+        //       because currently we allow same transactions in the chain, but just not in the same block.
+        return
+      }
+
+      assert(!this._miningResult, "this._miningResult is set")
+      this._miningResult = result
+
+      var proof = null
+
+      try {
+        proof = result.future.wait()
+        // If mining was canceled.
+        if (!proof) {
+          // TODO: What should we do with our pending transactions? What if they were not included in the winning block?
+          //       Should we try to put them back to be mined with the next block? But how to prevent/detect duplicates
+          //       because currently we allow same transactions in the chain, but just not in the same block.
+          return
+        }
+      }
+      finally {
+        this._miningResult = null
+      }
+
+      var nonce = enclaveInstance.teeProofOfLuckNonce(proof.Quote)
+
+      assert(nonce.hash === newPayloadAddress, `Nonce hash '${nonce.hash}' does not match payload address '${newPayloadAddress}'`)
+
+      var newBlock = new Block(this, {
+        Data: JSON.stringify({
+          Luck: nonce.luck,
+          Proof: {
+            Quote: bs58.encode(new Buffer(proof.Quote)),
+            Attestation: bs58.encode(new Buffer(proof.Attestation))
+          },
+          // Not trusted timestamp.
+          Time: new Date(),
+          // Not trusted miner ID.
+          // TODO: Make peer sign the block, so that the identity cannot be forged.
+          //       See: https://github.com/ipfs/interface-ipfs-core/issues/120
+          MinerId: this.ipfsInfo.id
+        }),
+        Links: [{
+          Name: "payload",
+          Hash: newPayloadAddress,
+          Size: newPayload.getCumulativeSize()
+        }]
+      })
+
+      var newBlockResponse = this.ipfs.object.putSync(newBlock.toJSON())
+      var newBlockAddress = newBlockResponse.toJSON().multihash
+
+      newBlock.address = newBlockAddress
+
+      this._cache.set(newBlockAddress, newBlock)
+
+      this.ipfs.pubsub.pubSync(this.getBlocksTopic(), newBlockAddress)
+      console.log(`New block mined: ${newBlock}`)
+
+      this.socketIo.emit('pendingResult', this.getPendingTransactions())
+    })
+  }
+
+  _restoreFromIPNS() {
+    // TODO: Implement. Set this._latestBlock to the block from IPNS.
+  }
+
+  _startMining() {
+    // It could happen that we already received a block from peers
+    // and/or already start a new round.
+    if (this._roundCallback || this._roundBlock) {
+      return
+    }
+
+    // Maybe we restored the latest block from somewhere, like IPNS, but have
+    // not yet started a new around. Let us resume mining from there.
+    if (this._latestBlock) {
+      this._newRound(this._latestBlock)
+      return
+    }
+
+    // We start a new genesis block. A genesis block does not require to start a round.
+    this._commitPendingTransactions()
+  }
+
+  /**
+   * Is a transaction with given address already pending for the next block?
+   */
+  isPendingTransaction(address) {
+    for (var transaction of this._pendingTransactions) {
+      if (transaction.Hash === address) {
+        return true
+      }
+    }
+    return false
+  }
+
+  /**
+   * Called when we get a new transaction request over our HTTP API with
+   * transaction address directly specified.
+   */
+  _onNewTransactionAddress(data, res) {
+    if (!isIPFS.multihash(data)) {
+      res.status(400).json({error: "invalid"})
+      return
+    }
+
+    // We do not want duplicate transactions in the same block,
+    // but we do allow duplicate transactions across blocks.
+    // This is an arbitrary design decision for this implementation.
+    if (this.isPendingTransaction(data)) {
+      res.status(400).json({error: "pending"})
+      return
+    }
+
+    try {
+      this.ipfs.pubsub.pubSync(this.getTransactionsTopic(), data)
+      console.log(`New transaction with address: ${data}`)
+    }
+    catch (error) {
+      res.status(400).json({error: "error"})
+      throw error
+    }
+    res.status(200).json({message: "success", address: data})
+  }
+
+  /**
+   * Called when we get a new transaction request over our HTTP API with
+   * transaction payload specified.
+   */
+  _onNewTransactionData(data, res) {
+    var response
+    try {
+      response = this.ipfs.object.putSync({
+        Data: data,
+        Links: []
+      })
+      this.ipfs.pin.addSync(response.toJSON().multihash, {recursive: false})
+    }
+    catch (error) {
+      res.status(400).json({error: "error"})
+      throw error
+    }
+
+    this._onNewTransactionAddress(response.toJSON().multihash, res)
+  }
+
+  _handleErrors(error) {
+    console.error("Exception during execution, continuing", error)
+  }
+}
+
+module.exports = function blockchain(node, options) {
+  FiberUtils.ensure(() => {
+    if (!enclaveInstance) {
+      enclaveInstance = enclave()
+    }
+
+    new Blockchain(node, options).start()
+  })
+}
+
+module.exports.DEFAULT_OPTIONS = DEFAULT_OPTIONS
