@@ -637,7 +637,11 @@ class Blockchain {
       assert(!this._miningResult, "this._miningResult is set")
 
       var proof
-      var result = enclaveInstance.teeProofOfLuckMineSync(newPayload.toJSON(), latestBlock ? latestBlock.toJSON() : null, latestBlock ? latestBlock.getPayload().toJSON() : null)
+      var result
+
+      FiberUtils.synchronize(this, '_newRound', () => {
+        result = enclaveInstance.teeProofOfLuckMineSync(newPayload.toJSON(), latestBlock ? latestBlock.toJSON() : null, latestBlock ? latestBlock.getPayload().toJSON() : null)
+      })
 
       assert(!this._miningResult, "this._miningResult is set")
       this._miningResult = result
