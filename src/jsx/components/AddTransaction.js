@@ -64,7 +64,7 @@ class AddTransaction extends React.Component {
     render() {
         return (
             <Grid>
-                <Row className='flipInX animated'>
+                <Row>
                     <Col sm={12}>
                         <Panel header="Add Transaction">
                             <form onSubmit={this.handleSubmit.bind(this)}>
