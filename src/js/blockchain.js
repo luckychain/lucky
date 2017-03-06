@@ -626,8 +626,21 @@ class Blockchain {
 
       this._cache.set(newPayloadAddress, newPayload)
 
-      // Round has changed since the start (code can yield). We cannot mine anymore within this round.
-      if ((roundBlock && roundBlock.getParentLink()) !== (this._roundBlock && this._roundBlock.getParentLink())) {
+      var result = null
+
+      // We have to make sure round block does not change during mining.
+      FiberUtils.synchronize(this, '_newRound', () => {
+        assert(!this._miningResult, "this._miningResult is set")
+
+        // Round has changed since the start (code can yield). We cannot mine anymore within this round.
+        if ((roundBlock && roundBlock.getParentLink()) !== (this._roundBlock && this._roundBlock.getParentLink())) {
+          return
+        }
+
+        result = enclaveInstance.teeProofOfLuckMineSync(newPayload.toJSON(), latestBlock ? latestBlock.toJSON() : null, latestBlock ? latestBlock.getPayload().toJSON() : null)
+      })
+
+      if (!result) {
         // TODO: What should we do with our pending transactions? What if they were not included in the winning block?
         //       Should we try to put them back to be mined with the next block? But how to prevent/detect duplicates
         //       because currently we allow same transactions in the chain, but just not in the same block.
@@ -635,16 +648,9 @@ class Blockchain {
       }
 
       assert(!this._miningResult, "this._miningResult is set")
-
-      var proof
-      var result
-
-      FiberUtils.synchronize(this, '_newRound', () => {
-        result = enclaveInstance.teeProofOfLuckMineSync(newPayload.toJSON(), latestBlock ? latestBlock.toJSON() : null, latestBlock ? latestBlock.getPayload().toJSON() : null)
-      })
-
-      assert(!this._miningResult, "this._miningResult is set")
       this._miningResult = result
+
+      var proof = null
 
       try {
         proof = result.future.wait()
