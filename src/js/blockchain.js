@@ -391,7 +391,7 @@ class Blockchain {
 
       socket.on('id', FiberUtils.in(() => {
         socket.emit('idResult', this.options.blockchainId)
-      }, this, this.id))
+      }, this, this._handleErrors))
 
       socket.on('sgx', FiberUtils.in(() => {
         socket.emit('sgxResult', this.getSGXVersion())

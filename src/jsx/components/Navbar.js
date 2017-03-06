@@ -12,6 +12,8 @@ class Navbar extends React.Component {
 
     componentDidMount() {
         NavbarStore.listen(this.onChange);
+        NavbarActions.getBlockchainId();
+        NavbarActions.getSGXVersion();
     }
 
     componentWillUnmount() {
@@ -37,12 +39,18 @@ class Navbar extends React.Component {
     }
 
     render() {
+        var sgx;
+        if (this.state.sgx) {
+            sgx = "SGX";
+        }
+        else {
+            sgx = "mock";
+        }
         return (
             <div className='navbar navbar-default navbar-fixed-top'>
                 <div className='navbar-header'>
                     <Link to='/' onClick={this.goHome.bind(this)} className='navbar-brand'>
-                        Luckychain
-                        <span className='badge badge-up badge-danger'>{this.state.onlineUsers}</span>
+                        Luckychain ({this.state.blockchainId}/{sgx})
                     </Link>
                 </div>
                 <div id='navbar' className='navbar-collapse collapse'>

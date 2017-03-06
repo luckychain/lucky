@@ -12,7 +12,7 @@ class Peers extends React.Component {
 
     componentDidMount() {
         PeersStore.listen(this.onChange);
-        PeersActions.getPeers()
+        PeersActions.getPeers();
     }
 
     componentWillUnmount() {
