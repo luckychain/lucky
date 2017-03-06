@@ -35,7 +35,7 @@ class Home extends React.Component {
             this.props.router.push('/');
             this.props.setActiveKey(null);
         } else {
-            this.props.router.push('/blocks/' + activeKey);
+            this.props.router.push('/block/' + activeKey);
             this.props.setActiveKey(activeKey);
         }
     }
@@ -54,14 +54,16 @@ class Home extends React.Component {
                                 {
                                     blocks.map((item) => {
                                         return (
-                                            <Panel key={item.id} eventKey={item.hash} header={"Block " + item.id + ": " + item.hash}>
-                                                <p><strong>Luck:</strong> {item.luck}</p>
-                                                <p><strong>Parent:</strong> {item.parent}</p>
-                                                <p><strong>Attestation:</strong> {JSON.stringify(item.attestation, null, 2)}</p>
+                                            <Panel key={item.Hash} eventKey={item.Hash} header={"Block " + item.Hash}>
+                                                <p><strong>Luck:</strong> {item.Data.Luck}</p>
+                                                <p><strong>Time:</strong> {item.Data.Time}</p>
+                                                <p><strong>Miner:</strong> {item.Data.MinerId}</p>
                                                 <p><strong>Transactions:</strong>
                                                     {
-                                                        item.transactions.map((tx) => {
-                                                            return (<span key={tx.hash}>{"\n" + tx.hash}  {tx.data.Data}</span>);
+                                                        item.Links[0].Content.Links.filter((link) => {
+                                                            return link.Name === "transaction"
+                                                        }).map((tx) => {
+                                                            return (<span key={tx.Hash}>{"\n" + tx.Hash}</span>);
                                                         })
                                                     }
                                                 </p>

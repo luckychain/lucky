@@ -58,7 +58,9 @@ class Navbar extends React.Component {
                     </form>
                     <ul className='nav navbar-nav'>
                         <li onClick={this.goHome.bind(this)}><Link to='/'>Home</Link></li>
-                        <li><Link to='/add'>Add</Link></li>
+                        <li><Link to='/add'>Add Transaction</Link></li>
+                        <li><Link to='/pending'>Pending Transactions</Link></li>
+                        <li><Link to='/peers'>Peers</Link></li>
                     </ul>
                 </div>
             </div>

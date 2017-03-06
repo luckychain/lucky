@@ -14,7 +14,6 @@ class App extends React.Component {
 
     componentDidMount() {
         AppStore.listen(this.onChange);
-        AppActions.getPeers();
         AppActions.getChain();
     }
 
@@ -38,15 +37,12 @@ class App extends React.Component {
         AppActions.searchSubmit({searchQuery:searchQuery, router:this.props.router, history:this.props.history});
     }
 
-
     render() {
-
-
         return (
             <div>
                 <Navbar history={this.props.history} blocks={this.state.blocks} searchSubmit={this.searchSubmit.bind(this)} goHome={this.goHome.bind(this)} />
                 <div>{React.cloneElement(this.props.children, { blocks: this.state.blocks, treeData:this.state.treeData, setActiveKey:this.setActiveKey, activeKey:this.state.activeKey, searchSubmit:this.searchSubmit.bind(this)})}</div>
-                <Footer peers={this.state.peers} />
+                <Footer/>
             </div>
         );
     }
