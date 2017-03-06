@@ -595,16 +595,19 @@ class Blockchain {
       var newTransactions = this._pendingTransactions
       this._pendingTransactions = []
 
+      // We store it into a variable now, because it could change while we are committing pending transactions.
+      var latestBlock = this._latestBlock
+
       var newPayloadObject = {
         Data: "",
         Links: newTransactions
       }
 
-      if (this._latestBlock) {
+      if (latestBlock) {
         newPayloadObject.Links.push({
           Name: "parent",
-          Hash: this._latestBlock.getAddress(),
-          Size: this._latestBlock.getCumulativeSize()
+          Hash: latestBlock.getAddress(),
+          Size: latestBlock.getCumulativeSize()
         })
       }
       else {
@@ -625,7 +628,7 @@ class Blockchain {
       assert(!this._miningResult, "this._miningResult is set")
 
       var proof
-      var result = enclaveInstance.teeProofOfLuckMineSync(newPayload.toJSON(), this._latestBlock ? this._latestBlock.toJSON() : null, this._latestBlock ? this._latestBlock.getPayload().toJSON() : null)
+      var result = enclaveInstance.teeProofOfLuckMineSync(newPayload.toJSON(), latestBlock ? latestBlock.toJSON() : null, latestBlock ? latestBlock.getPayload().toJSON() : null)
 
       assert(!this._miningResult, "this._miningResult is set")
       this._miningResult = result
