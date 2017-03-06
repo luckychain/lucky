@@ -30,7 +30,7 @@ class Peers extends React.Component {
                 <Row>
                     <Col sm={12}>
                         <Panel header="Block Explorer">
-                            <PeerGraph peersStarGraph={state.peers}/>
+                            <PeerGraph peersStarGraph={this.state.peers}/>
                         </Panel>
                     </Col>
                 </Row>
