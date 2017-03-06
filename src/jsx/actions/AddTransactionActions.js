@@ -16,21 +16,20 @@ class AddTransactionActions {
 
         var addTransactionActions = this;
 
-        let transaction = {
-            tx: {
-                Data: data
-                //timestamp: Date.now()
-            },
-            type: txType
+        var transaction = {
+          type: txType,
+          data: data
         };
 
         request({
-          url: baseURL + '/tx', 
+          url: baseURL + '/api/v0/tx',
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json'
+          },
           body: JSON.stringify(transaction)
         }, function(error, response, body) {
-          if (response.statusCode === 200) {
+          if (response && response.statusCode === 200) {
             console.log(response);
             addTransactionActions.actions.addTransactionSuccess(response.body);
           } else {
