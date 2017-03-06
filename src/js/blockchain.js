@@ -597,6 +597,7 @@ class Blockchain {
 
       // We store it into a variable now, because it could change while we are committing pending transactions.
       var latestBlock = this._latestBlock
+      var roundBlock = this._roundBlock
 
       var newPayloadObject = {
         Data: "",
@@ -624,6 +625,14 @@ class Blockchain {
       newPayload.address = newPayloadAddress
 
       this._cache.set(newPayloadAddress, newPayload)
+
+      // Round has changed since the start (code can yield). We cannot mine anymore within this round.
+      if (roundBlock.getPayloadLink() !== this._roundBlock.getPayloadLink()) {
+        // TODO: What should we do with our pending transactions? What if they were not included in the winning block?
+        //       Should we try to put them back to be mined with the next block? But how to prevent/detect duplicates
+        //       because currently we allow same transactions in the chain, but just not in the same block.
+        return
+      }
 
       assert(!this._miningResult, "this._miningResult is set")
 
