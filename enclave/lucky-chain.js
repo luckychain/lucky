@@ -91,6 +91,7 @@ var counter = teeIncrementMonotonicCounter()
 var roundBlockPayload = null
 var roundTime = null
 var sleepCallback = null
+var sleepTime = null
 
 /**
  * Returns an IPFS hash of a given object, returning a buffer.
@@ -181,6 +182,7 @@ function teeProofOfLuckRound(blockPayload) {
   }
 
   sleepCallback = null
+  sleepTime = null
   roundBlockPayload = blockPayload
   roundTime = teeGetTrustedTime()
 }
@@ -203,6 +205,10 @@ function teeProofOfLuckMine(payload, previousBlock, previousBlockPayload, callba
 
   if (sleepCallback !== null) {
     throw new Error("Invalid state, sleepCallback")
+  }
+
+  if (sleepTime !== null) {
+    throw new Error("Invalid state, sleepTime")
   }
 
   if (roundBlockPayload === null || roundTime === null) {
@@ -269,6 +275,10 @@ function teeProofOfLuckMineGenesis(payload, callback) {
     throw new Error("Invalid state, sleepCallback")
   }
 
+  if (sleepTime !== null) {
+    throw new Error("Invalid state, sleepTime")
+  }
+
   if (!verifyPayload(payload)) {
     throw new Error("Invalid payload")
   }
@@ -295,18 +305,25 @@ function teeProofOfLuckMineGenesis(payload, callback) {
  * of the enclave an then returning back in after sleeping time passed.
  */
 function teeProofOfLuckResumeFromSleep() {
-  // TODO: Verify that really sleeping time passed. At least seconds.
-
   if (sleepCallback === null) {
     throw new Error("Invalid state, sleepCallback")
+  }
+
+  if (sleepTime === null) {
+    throw new Error("Invalid state, sleepTime")
   }
 
   if (roundBlockPayload !== null || roundTime !== null) {
     throw new Error("Invalid state, roundBlockPayload or roundTime")
   }
 
+  if (sleepTime > teeGetTrustedTime()) {
+    throw new Error("Premature resumption from sleep")
+  }
+
   var callback = sleepCallback
   sleepCallback = null
+  sleepTime = null
 
   return callback()
 }
@@ -325,6 +342,8 @@ function buildNonce(payloadHash, l, callback) {
   // payloadHash.
   nonceArray.set(payloadHash, 10)
 
+  var fl = f(l)
+
   sleepCallback = function () {
     var newCounter = teeReadMonotonicCounter()
     if (counter !== newCounter) {
@@ -333,9 +352,10 @@ function buildNonce(payloadHash, l, callback) {
 
     return teeReport(nonceBuffer)
   }
+  sleepTime = teeGetTrustedTime() + Math.floor(fl)
 
   // Returns the time to sleep, in seconds.
-  callback(null, f(l), l)
+  callback(null, fl, l)
 }
 
 SecureWorker.onMessage(function (message) {
