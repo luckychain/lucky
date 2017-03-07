@@ -66,7 +66,7 @@ class AddTransaction extends React.Component {
       <Grid>
         <Row>
           <Col sm={12}>
-            <Panel header={(<span>Add Transaction</span>)}>
+            <Panel header={(<h4>Add Transaction</h4>)}>
               <form onSubmit={this.handleSubmit.bind(this)}>
                 <div className={'form-group ' + this.state.txValidationState}>
                   <label className='control-label'>Transaction</label>

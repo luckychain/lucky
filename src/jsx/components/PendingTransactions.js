@@ -8,7 +8,7 @@ class PendingTransactions extends React.Component {
       <Grid>
         <Row>
           <Col sm={12}>
-            <Panel header={(<span>Pending Transactions</span>)}>
+            <Panel header={(<h4>Pending Transactions</h4>)}>
               <ListGroup>
                 {
                   this.props.transactions.map((item) => {

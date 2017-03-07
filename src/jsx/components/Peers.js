@@ -7,7 +7,7 @@ class Peers extends React.Component {
       <Grid>
         <Row>
           <Col sm={12}>
-            <Panel header={(<span>Peers</span>)}>
+            <Panel header={(<h4>Peers</h4>)}>
               <ListGroup>
                 {
                   this.props.peers.map((item) => {
