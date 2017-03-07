@@ -19,7 +19,7 @@ class AppActions {
   }
 
   getChain() {
-    socket.emit('chain');
+    socket.emit('chain', {limit: this.alt.stores.AppStore.state.blocksLimit, decreasing: this.alt.stores.AppStore.state.blocksDecreasing});
   }
 
   getPeers() {

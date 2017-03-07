@@ -356,18 +356,44 @@ class Blockchain {
     return Array.from(this.peers.values())
   }
 
-  getChain() {
+  getChain(limit, decreasing) {
     var chain = []
-    var block = this._latestBlock
-    while (block) {
-      var json = block.toJSON()
-      json.Hash = block.address
-      json.Data = JSON.parse(json.Data)
-      json.Links[0].Content = block.getPayload().toJSON()
-      chain.push(json)
-      block = block.getParent()
+    var block
+    var hasMore = false
+    if (decreasing) {
+      block = this._latestBlock
+      for (var i = 0; block && i < limit; i++) {
+        var json = block.toJSON()
+        json.Hash = block.address
+        json.Data = JSON.parse(json.Data)
+        json.Links[0].Content = block.getPayload().toJSON()
+        chain.push(json)
+        block = block.getParent()
+      }
+      if (block && block.getParentLink()) {
+        hasMore = true
+      }
     }
-    return chain
+    else {
+      block = this._latestBlock
+      while (block) {
+        var json = block.toJSON()
+        json.Hash = block.address
+        json.Data = JSON.parse(json.Data)
+        json.Links[0].Content = block.getPayload().toJSON()
+        chain.push(json)
+        block = block.getParent()
+      }
+      if (chain.length > limit) {
+        hasMore = true
+      }
+      chain.reverse()
+      chain = chain.slice(0, limit)
+    }
+    return {
+      chain: chain,
+      hasMore: hasMore
+    }
   }
 
   getPendingTransactions() {
@@ -403,8 +429,12 @@ class Blockchain {
         socket.emit('peersResult', this.getPeers())
       }, this, this._handleErrors))
 
-      socket.on('chain', FiberUtils.in(() => {
-        socket.emit('chainResult', this.getChain())
+      socket.on('chain', FiberUtils.in((args) => {
+        var limit = args && args.limit && parseInt(args.limit) || 100
+        var decreasing = !args || args.decreasing !== false
+        if (_.isFinite(limit) && limit > 0 && _.isBoolean(decreasing)) {
+          socket.emit('chainResult', this.getChain(limit, decreasing))
+        }
       }, this, this._handleErrors))
 
       socket.on('pending', FiberUtils.in(() => {
@@ -425,9 +455,14 @@ class Blockchain {
     }, this, this._handleErrors))
 
     this.node.get("/api/v0/chain", FiberUtils.in((req, res, next) => {
-      res.status(200).json({
-        chain: this.getChain()
-      })
+      var limit = req.query.limit && parseInt(req.query.limit) || 100
+      var decreasing = req.query.decreasing !== "false"
+      if (_.isFinite(limit) && limit > 0 && _.isBoolean(decreasing)) {
+        res.status(200).json(this.getChain(limit, decreasing))
+      }
+      else {
+        res.status(400).json({error: "invalid"})
+      }
     }, this, this._handleErrors))
 
     this.node.get("/api/v0/pending", FiberUtils.in((req, res, next) => {
