@@ -9,6 +9,8 @@ var enclave = require('./enclave')
 var FiberUtils = require('./fiber-utils')
 var clone = require('clone')
 
+Error.stackTraceLimit = 100
+
 var enclaveInstance = null
 
 var DAGNodeCreateSync = FiberUtils.wrap(dagPB.DAGNode.create)
