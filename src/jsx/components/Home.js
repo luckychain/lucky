@@ -14,9 +14,9 @@ class Home extends React.Component {
     var transactionsElements;
     if (transactions.length) {
       transactionsElements = [
-        <strong>Transactions:</strong>
+        <strong key="transactions">Transactions:</strong>
       ,
-        <ListGroup className="transactions">
+        <ListGroup key="transactions-group" className="transactions">
           {
             transactions.map((item) => {
               return (
