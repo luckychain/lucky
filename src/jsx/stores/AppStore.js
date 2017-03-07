@@ -9,6 +9,7 @@ class AppStore {
     this.blocksHasMore = true;
     this.blocksLimit = 100;
     this.blocksDecreasing = true;
+    this.chainLength = 0;
     this.peers = [];
     this.transactions = [];
     this.blockchainId = null;
@@ -22,6 +23,10 @@ class AppStore {
   onGetChainSuccess(data) {
     this.blocks = data.chain;
     this.blocksHasMore = data.hasMore;
+  }
+
+  onGetChainLengthSuccess(data) {
+    this.chainLength = data;
   }
 
   onGetPeersSuccess(data) {

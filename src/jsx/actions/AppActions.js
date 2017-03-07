@@ -9,6 +9,8 @@ class AppActions {
       'flipOrder',
       'getChainSuccess',
       'getChainFail',
+      'getChainLengthSuccess',
+      'getChainLengthFail',
       'getPeersSuccess',
       'getPeersFail',
       'getPendingTransactionsSuccess',
@@ -20,6 +22,10 @@ class AppActions {
 
   getChain() {
     socket.emit('chain', {limit: this.alt.stores.AppStore.state.blocksLimit, decreasing: this.alt.stores.AppStore.state.blocksDecreasing});
+  }
+
+  getChainLength() {
+    socket.emit('length');
   }
 
   getPeers() {
@@ -41,6 +47,10 @@ socket.on('chainResult', (body) => {
   actions.getChainSuccess(body);
 });
 
+socket.on('lengthResult', (body) => {
+  actions.getChainLengthSuccess(body);
+});
+
 socket.on('peersResult', (body) => {
   actions.getPeersSuccess(body);
 });
@@ -54,6 +64,7 @@ socket.on('idResult', (body) => {
 });
 
 socket.on('chainUpdated', () => {
+  actions.getChainLength();
   actions.getChain();
 });
 

@@ -15,6 +15,7 @@ class App extends React.Component {
   componentDidMount() {
     AppStore.listen(this.onChange);
     AppActions.getBlockchainId();
+    AppActions.getChainLength();
     AppActions.getChain();
     AppActions.getPeers();
     AppActions.getPendingTransactions();
@@ -31,7 +32,7 @@ class App extends React.Component {
   render() {
     return (
       <div>
-        <Navbar blockchainId={this.state.blockchainId} transactions={this.state.transactions} peers={this.state.peers} />
+        <Navbar blockchainId={this.state.blockchainId} transactions={this.state.transactions} peers={this.state.peers} chainLength={this.state.chainLength} />
         <div className="content">{React.cloneElement(this.props.children, {blocks: this.state.blocks, peers: this.state.peers, transactions: this.state.transactions, sortDown: this.state.sortDown})}</div>
         <Footer/>
       </div>

@@ -190,6 +190,7 @@ class Block extends Node {
     this.getPayload()
     this.getParent()
 
+    this.chainLength = this._computeChainLength()
     this.chainLuck = this._computeChainLuck()
   }
 
@@ -219,6 +220,19 @@ class Block extends Node {
 
   getParent() {
     return this.getPayload().getParent()
+  }
+
+  _computeChainLength() {
+    var length = 1
+    var parent = this.getParent()
+    if (parent) {
+      length += parent.getChainLength()
+    }
+    return length
+  }
+
+  getChainLength() {
+    return this.chainLength
   }
 
   _computeChainLuck() {
@@ -398,6 +412,15 @@ class Blockchain {
     }
   }
 
+  getChainLength() {
+    if (this._latestBlock) {
+      return this._latestBlock.getChainLength()
+    }
+    else {
+      return 0
+    }
+  }
+
   getPendingTransactions() {
     return this._pendingTransactions
   }
@@ -439,6 +462,10 @@ class Blockchain {
         }
       }, this, this._handleErrors))
 
+      socket.on('length', FiberUtils.in(() => {
+        socket.emit('lengthResult', this.getChainLength())
+      }, this, this._handleErrors))
+
       socket.on('pending', FiberUtils.in(() => {
         socket.emit('pendingResult', this.getPendingTransactions())
       }, this, this._handleErrors))
@@ -465,6 +492,12 @@ class Blockchain {
       else {
         res.status(400).json({error: "invalid"})
       }
+    }, this, this._handleErrors))
+
+    this.node.get("/api/v0/length", FiberUtils.in((req, res, next) => {
+      res.status(200).json({
+        length: this.getChainLength()
+      })
     }, this, this._handleErrors))
 
     this.node.get("/api/v0/pending", FiberUtils.in((req, res, next) => {
