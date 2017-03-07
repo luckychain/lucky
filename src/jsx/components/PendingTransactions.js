@@ -1,5 +1,6 @@
 import React from 'react';
-import {Grid, Row, Col, Panel} from 'react-bootstrap';
+import {Grid, Row, Col, Panel, ListGroup} from 'react-bootstrap';
+import Transaction from './Transaction';
 
 class PendingTransactions extends React.Component {
   render() {
@@ -8,13 +9,15 @@ class PendingTransactions extends React.Component {
         <Row>
           <Col sm={12}>
             <Panel header={(<span>Pending Transactions</span>)}>
-              {
-                this.props.transactions.map((item) => {
-                  return (
-                    <p key={item.Hash}>{"Transaction " + item.Hash + " (" + item.Size + " B)"}</p>
-                  );
-                })
-              }
+              <ListGroup>
+                {
+                  this.props.transactions.map((item) => {
+                    return (
+                      <Transaction key={item.Hash} transaction={item} />
+                    );
+                  })
+                }
+              </ListGroup>
             </Panel>
           </Col>
         </Row>

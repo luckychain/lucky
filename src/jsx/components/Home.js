@@ -18,7 +18,7 @@ class Home extends React.Component {
       <Grid>
         <Row>
           <Col sm={12}>
-            <Panel header={(<span>Blockchain <Glyphicon glyph="sort" className='pull-right' style={{cursor:'pointer'}} onClick={this.flipOrder.bind(this)} />  </span>)}>
+            <Panel header={(<span>Blockchain <Glyphicon glyph="sort" className='pull-right' style={{cursor: 'pointer', top: '3px'}} onClick={this.flipOrder.bind(this)} /></span>)}>
               <PanelGroup accordion>
                 {
                   blocks.map((item) => {
