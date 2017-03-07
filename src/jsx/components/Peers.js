@@ -1,5 +1,5 @@
 import React from 'react';
-import {Grid, Row, Col, Panel} from 'react-bootstrap';
+import {Grid, Row, Col, Panel, ListGroup, ListGroupItem} from 'react-bootstrap';
 
 class Peers extends React.Component {
   render() {
@@ -8,13 +8,15 @@ class Peers extends React.Component {
         <Row>
           <Col sm={12}>
             <Panel header={(<span>Peers</span>)}>
-              {
-                this.props.peers.map((item) => {
-                  return (
-                    <p key={item.id}>{"Peer " + item.id}</p>
-                  );
-                })
-              }
+              <ListGroup>
+                {
+                  this.props.peers.map((item) => {
+                    return (
+                      <ListGroupItem key={item.id}>{item.id}</ListGroupItem>
+                    );
+                  })
+                }
+              </ListGroup>
             </Panel>
           </Col>
         </Row>
