@@ -6,46 +6,46 @@ import AppActions from '../actions/AppActions';
 import { withRouter } from 'react-router';
 
 class App extends React.Component {
-    constructor(props) {
-        super(props);
-        this.state = AppStore.getState();
-        this.onChange = this.onChange.bind(this);
-    }
+  constructor(props) {
+    super(props);
+    this.state = AppStore.getState();
+    this.onChange = this.onChange.bind(this);
+  }
 
-    componentDidMount() {
-        AppStore.listen(this.onChange);
-        AppActions.getChain();
-    }
+  componentDidMount() {
+    AppStore.listen(this.onChange);
+    AppActions.getChain();
+  }
 
-    componentWillUnmount() {
-        AppStore.unlisten(this.onChange);
-    }
+  componentWillUnmount() {
+    AppStore.unlisten(this.onChange);
+  }
 
-    onChange(state) {
-        this.setState(state);
-    }
+  onChange(state) {
+    this.setState(state);
+  }
 
-    setActiveKey(activeKey) {
-        AppActions.setActiveKey(activeKey);
-    }
+  setActiveKey(activeKey) {
+    AppActions.setActiveKey(activeKey);
+  }
 
-    goHome() {
-        AppActions.goHome({router:this.props.router, history:this.props.history});
-    }
+  goHome() {
+    AppActions.goHome({router:this.props.router, history:this.props.history});
+  }
 
-    searchSubmit (searchQuery) {
-        AppActions.searchSubmit({searchQuery:searchQuery, router:this.props.router, history:this.props.history});
-    }
+  searchSubmit (searchQuery) {
+    AppActions.searchSubmit({searchQuery:searchQuery, router:this.props.router, history:this.props.history});
+  }
 
-    render() {
-        return (
-            <div>
-                <Navbar history={this.props.history} blocks={this.state.blocks} searchSubmit={this.searchSubmit.bind(this)} goHome={this.goHome.bind(this)} />
-                <div className="content">{React.cloneElement(this.props.children, { blocks: this.state.blocks, treeData:this.state.treeData, setActiveKey:this.setActiveKey, activeKey:this.state.activeKey, searchSubmit:this.searchSubmit.bind(this)})}</div>
-                <Footer/>
-            </div>
-        );
-    }
+  render() {
+    return (
+      <div>
+        <Navbar history={this.props.history} blocks={this.state.blocks} searchSubmit={this.searchSubmit.bind(this)} goHome={this.goHome.bind(this)} />
+        <div className="content">{React.cloneElement(this.props.children, { blocks: this.state.blocks, treeData:this.state.treeData, setActiveKey:this.setActiveKey, activeKey:this.state.activeKey, searchSubmit:this.searchSubmit.bind(this)})}</div>
+        <Footer/>
+      </div>
+    );
+  }
 }
 
 export default withRouter(App);

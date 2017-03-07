@@ -7,11 +7,11 @@ import PendingTransactions from './components/PendingTransactions';
 import Peers from './components/Peers';
 
 export default (
-    <Route component={App}>
-        <Route path='/' component={Home} />
-        <Route path='/block/:blockHash' component={Home} />
-        <Route path='/add' component={AddTransaction} />
-        <Route path='/pending' component={PendingTransactions} />
-        <Route path='/peers' component={Peers} />
-    </Route>
+  <Route component={App}>
+    <Route path='/' component={Home} />
+    <Route path='/block/:blockHash' component={Home} />
+    <Route path='/add' component={AddTransaction} />
+    <Route path='/pending' component={PendingTransactions} />
+    <Route path='/peers' component={Peers} />
+  </Route>
 );

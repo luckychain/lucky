@@ -2,32 +2,32 @@ import alt from '../alt';
 import AddTransactionActions from '../actions/AddTransactionActions';
 
 class AddTransactionStore {
-    constructor() {
-        this.bindActions(AddTransactionActions);
-        this.name = '';
-        this.helpBlock = '';
-        this.txValidationState = '';
-    }
+  constructor() {
+    this.bindActions(AddTransactionActions);
+    this.name = '';
+    this.helpBlock = '';
+    this.txValidationState = '';
+  }
 
-    onAddTransactionSuccess(successMessage) {
-        this.txValidationState = 'has-success';
-        this.helpBlock = successMessage;
-    }
+  onAddTransactionSuccess(successMessage) {
+    this.txValidationState = 'has-success';
+    this.helpBlock = successMessage;
+  }
 
-    onAddTransactionFail(errorMessage) {
-        this.txValidationState = 'has-error';
-        this.helpBlock = errorMessage;
-    }
+  onAddTransactionFail(errorMessage) {
+    this.txValidationState = 'has-error';
+    this.helpBlock = errorMessage;
+  }
 
-    onEmptyTx() {
-        this.txValidationState = 'has-error';
-        this.helpBlock = 'Please enter a transaction.';
-    }
+  onEmptyTx() {
+    this.txValidationState = 'has-error';
+    this.helpBlock = 'Please enter a transaction.';
+  }
 
-    onInvalidPayload() {
-        this.txValidationState = 'has-error';
-        this.helpBlock = 'Transaction is not in proper format.'
-    }
+  onInvalidPayload() {
+    this.txValidationState = 'has-error';
+    this.helpBlock = 'Transaction is not in proper format.'
+  }
 
 }
 
