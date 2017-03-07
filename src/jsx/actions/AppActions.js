@@ -1,22 +1,56 @@
 import alt from '../alt';
-var io = require('socket.io-client');
+import io from 'socket.io-client';
+
+var socket = io();
 
 class AppActions {
   constructor() {
     this.generateActions(
+      'flipOrder',
       'getChainSuccess',
-      'getChainFail'
+      'getChainFail',
+      'getPeersSuccess',
+      'getPeersFail',
+      'getPendingTransactionsSuccess',
+      'getPendingTransactionsFail',
+      'getBlockchainIdSuccess',
+      'getBlockchainIdFail'
     );
   }
 
   getChain() {
-    var that = this;
-    this.socket = io();
-    this.socket.emit('chain');
-    this.socket.on('chainResult', function (body) {
-      that.actions.getChainSuccess(body);
-    });
+    socket.emit('chain');
+  }
+
+  getPeers() {
+    socket.emit('peers');
+  }
+
+  getPendingTransactions() {
+    socket.emit('pending');
+  }
+
+  getBlockchainId() {
+    socket.emit('id');
   }
 }
 
-export default alt.createActions(AppActions);
+var actions = alt.createActions(AppActions);
+
+socket.on('chainResult', (body) => {
+  actions.getChainSuccess(body);
+});
+
+socket.on('peersResult', (body) => {
+  actions.getPeersSuccess(body);
+});
+
+socket.on('pendingResult', (body) => {
+  actions.getPendingTransactionsSuccess(body);
+});
+
+socket.on('idResult', (body) => {
+  actions.getBlockchainIdSuccess(body);
+});
+
+export default actions;

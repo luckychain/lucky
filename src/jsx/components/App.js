@@ -3,7 +3,7 @@ import Footer from './Footer';
 import Navbar from './Navbar';
 import AppStore from '../stores/AppStore'
 import AppActions from '../actions/AppActions';
-import { withRouter } from 'react-router';
+import {withRouter} from 'react-router';
 
 class App extends React.Component {
   constructor(props) {
@@ -15,6 +15,9 @@ class App extends React.Component {
   componentDidMount() {
     AppStore.listen(this.onChange);
     AppActions.getChain();
+    AppActions.getPeers();
+    AppActions.getPendingTransactions()
+    AppActions.getBlockchainId();
   }
 
   componentWillUnmount() {
@@ -28,8 +31,8 @@ class App extends React.Component {
   render() {
     return (
       <div>
-        <Navbar blocks={this.state.blocks} />
-        <div className="content">{React.cloneElement(this.props.children, { blocks: this.state.blocks })}</div>
+        <Navbar/>
+        <div className="content">{React.cloneElement(this.props.children, {blocks: this.state.blocks, peers: this.state.peers, transactions: this.state.transactions, blockchainId: this.state.blockchainId})}</div>
         <Footer/>
       </div>
     );

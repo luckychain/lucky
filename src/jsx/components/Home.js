@@ -1,37 +1,17 @@
 import React from 'react';
 import {Grid, Row, Col, Panel, PanelGroup, Glyphicon} from 'react-bootstrap';
-import { withRouter } from 'react-router';
-import HomeStore from '../stores/HomeStore';
-import HomeActions from '../actions/HomeActions';
+import {withRouter} from 'react-router';
+import AppActions from '../actions/AppActions';
 
 class Home extends React.Component {
-
-  constructor(props) {
-    super(props);
-    this.state = HomeStore.getState();
-    this.onChange = this.onChange.bind(this);
-  }
-
-  componentDidMount() {
-    HomeStore.listen(this.onChange);
-  }
-
-  componentWillUnmount() {
-    HomeStore.unlisten(this.onChange);
-  }
-
-  onChange(state) {
-    this.setState(state);
-  }
-
   flipOrder(event) {
     event.preventDefault();
-    HomeActions.flipOrder();
+    AppActions.flipOrder();
   }
 
   render() {
     var blocks = this.props.blocks;
-    if (!this.state.sortDown) {
+    if (!this.props.sortDown) {
       blocks = blocks.slice().reverse();
     }
     return (
