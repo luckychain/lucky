@@ -324,13 +324,20 @@ class Blockchain {
 
   getPayload(address) {
     if (!this._cache.has(address)) {
-      var node = this._getNode(address)
-      var payload = new Payload(this, node, address)
+      // We synchronize based on the argument to prevent executing the method for the same argument in parallel.
+      FiberUtils.synchronize(this, `_getNode/${address}`, () => {
+        // We check again because it might be that while we were synchronizing another call populated the cache.
+        // We synchronize inside the if statement so that for the common case (object already in the cache) we do
+        // not even try to synchronize.
+        if (this._cache.has(address)) {
+          return
+        }
 
-      // We check again because fiber could yield in meantime.
-      if (!this._cache.has(address)) {
+        var node = this._getNode(address)
+        var payload = new Payload(this, node, address)
+
         this._cache.set(address, payload)
-      }
+      })
     }
 
     var payload = this._cache.get(address)
@@ -340,13 +347,20 @@ class Blockchain {
 
   getBlock(address) {
     if (!this._cache.has(address)) {
-      var node = this._getNode(address)
-      var block = new Block(this, node, address)
+      // We synchronize based on the argument to prevent executing the method for the same argument in parallel.
+      FiberUtils.synchronize(this, `_getNode/${address}`, () => {
+        // We check again because it might be that while we were synchronizing another call populated the cache.
+        // We synchronize inside the if statement so that for the common case (object already in the cache) we do
+        // not even try to synchronize.
+        if (this._cache.has(address)) {
+          return
+        }
 
-      // We check again because fiber could yield in meantime.
-      if (!this._cache.has(address)) {
+        var node = this._getNode(address)
+        var block = new Block(this, node, address)
+
         this._cache.set(address, block)
-      }
+      })
     }
 
     var block = this._cache.get(address)
@@ -557,122 +571,127 @@ class Blockchain {
   }
 
   _onTransaction(transactionAddress) {
-    if (this.isPendingTransaction(transactionAddress)) {
-      return
-    }
+    // We synchronize based on the argument to prevent executing the method for the same argument in parallel.
+    FiberUtils.synchronize(this, `_onTransaction/${transactionAddress}`, () => {
+      if (this.isPendingTransaction(transactionAddress)) {
+        return
+      }
 
-    var stat = this.ipfs.object.statSync(transactionAddress)
+      var stat = this.ipfs.object.statSync(transactionAddress)
 
-    // We check again because fiber could yield in meantime.
-    if (this.isPendingTransaction(transactionAddress)) {
-      return
-    }
+      console.log(`New pending transaction: ${transactionAddress}`)
+      this._pendingTransactions.push({
+        Name: "transaction",
+        Hash: transactionAddress,
+        Size: stat.BlockSize
+      })
 
-    console.log(`New pending transaction: ${transactionAddress}`)
-    this._pendingTransactions.push({
-      Name: "transaction",
-      Hash: transactionAddress,
-      Size: stat.BlockSize
+      // TODO: Pub/sub should broadcast this transaction only now.
+      //       Currently pub/sub broadcasts every transaction fully to everyone. We want that only if a
+      //       transaction has been processed to the end here, this node broadcasts it further. Eg., it could be
+      //       that the transaction has been already known and so it has already broadcast it before, so it does not
+      //       have to do it now again.
+      //       See: https://github.com/ipfs/go-ipfs/issues/3741
+
+      this.socketIo.emit('pendingResult', this.getPendingTransactions())
     })
-
-    // TODO: Pub/sub should broadcast this transaction only now.
-    //       Currently pub/sub broadcasts every transaction fully to everyone. We want that only if a
-    //       transaction has been processed to the end here, this node broadcasts it further. Eg., it could be
-    //       that the transaction has been already known and so it has already broadcast it before, so it does not
-    //       have to do it now again.
-    //       See: https://github.com/ipfs/go-ipfs/issues/3741
-
-    this.socketIo.emit('pendingResult', this.getPendingTransactions())
   }
 
   _onBlock(blockAddress) {
-    // Block constructor also validates the whole chain.
-    var block = this.getBlock(blockAddress)
+    // We synchronize based on the argument to prevent executing the method for the same argument in parallel.
+    FiberUtils.synchronize(this, `_onBlock/${blockAddress}`, () => {
+      // Block constructor also validates the whole chain.
+      var block = this.getBlock(blockAddress)
 
-    // getBlock can yield, but it does not matter, we can still compare.
-    if (this._latestBlock && block.getChainLuck() <= this._latestBlock.getChainLuck()) {
-      return
-    }
+      // getBlock can yield, but it does not matter, we can still compare.
+      if (this._latestBlock && block.getChainLuck() <= this._latestBlock.getChainLuck()) {
+        return
+      }
 
-    assert(!this._roundBlock || !this._latestBlock || this._latestBlock.getParentLink() === this._roundBlock.getParentLink(), "Latest's block parent link is not the same as round's block parent link")
+      assert(!this._roundBlock || !this._latestBlock || this._latestBlock.getParentLink() === this._roundBlock.getParentLink(), "Latest's block parent link is not the same as round's block parent link")
 
-    // We have already mined a block and are sleeping before releasing it. It is strange that we would get a block
-    // extending current chain before we released our block, if our block is luckier than the block we just received.
-    // So we check for this special case and ignore such blocks, because once we release our block the chain for everyone
-    // will switch to this our chain anyway. If we were not ignore it, this block would trigger a new round and our mining
-    // of luckier block would be terminated.
-    if (this._roundBlock && this._latestBlock && this._miningResult && _.isFinite(this._miningResult.luck) && block.getParent() && block.getParent().getParentLink() === this._roundBlock.getParentLink() && (block.getLuck() + block.getParent().getLuck() < this._miningResult.luck + this._latestBlock.getLuck())) {
-      console.log(`Received new luckier latest block out of order, ignoring: ${block}`)
-      return
-    }
+      // We have already mined a block and are sleeping before releasing it. It is strange that we would get a block
+      // extending current chain before we released our block, if our block is luckier than the block we just received.
+      // So we check for this special case and ignore such blocks, because once we release our block the chain for everyone
+      // will switch to this our chain anyway. If we were not ignore it, this block would trigger a new round and our mining
+      // of luckier block would be terminated.
+      if (this._roundBlock && this._latestBlock && this._miningResult && _.isFinite(this._miningResult.luck) && block.getParent() && block.getParent().getParentLink() === this._roundBlock.getParentLink() && (block.getLuck() + block.getParent().getLuck() < this._miningResult.luck + this._latestBlock.getLuck())) {
+        console.log(`Received new luckier latest block out of order, ignoring: ${block}`)
+        return
+      }
 
-    console.log(`New latest block: ${block}`)
+      console.log(`New latest block: ${block}`)
 
-    var previousLatestBlock = this._latestBlock
-    this._latestBlock = block
+      var previousLatestBlock = this._latestBlock
+      this._latestBlock = block
 
-    this.socketIo.emit('chainUpdated')
+      this.socketIo.emit('chainUpdated')
 
-    if (this._roundBlock) {
-      // If during a mining on a round block we get a better chain, we do not switch to mining on this better chain
-      // if the parent of both blocks is the same. This can happen if the chain was prolonged and we start mining
-      // on it, but then a delayed best chain from the previous round arrives. Chains are equal up to the last block.
-      if (this._latestBlock.getParentLink() !== this._roundBlock.getParentLink()) {
+      if (this._roundBlock) {
+        // If during a mining on a round block we get a better chain, we do not switch to mining on this better chain
+        // if the parent of both blocks is the same. This can happen if the chain was prolonged and we start mining
+        // on it, but then a delayed best chain from the previous round arrives. Chains are equal up to the last block.
+        if (this._latestBlock.getParentLink() !== this._roundBlock.getParentLink()) {
+          this._newRound(block)
+        }
+      }
+      else {
         this._newRound(block)
       }
-    }
-    else {
-      this._newRound(block)
-    }
 
-    // _newRound could yield, so we make sure we still have the same latest block.
-    if (this._latestBlock !== block) {
-      return
-    }
+      // _newRound could yield, so we make sure we still have the same latest block.
+      if (this._latestBlock !== block) {
+        return
+      }
 
-    // TODO: Pub/sub should broadcast this block only now.
-    //       Currently pub/sub broadcasts every block fully to everyone. We want that only if a block has been
-    //       processed to the end here, this node broadcasts it further. Eg., it could be that the block represents
-    //       a chain which is invalid or less lucky than currently known best (latest) chain.
-    //       See: https://github.com/ipfs/go-ipfs/issues/3741
+      // TODO: Pub/sub should broadcast this block only now.
+      //       Currently pub/sub broadcasts every block fully to everyone. We want that only if a block has been
+      //       processed to the end here, this node broadcasts it further. Eg., it could be that the block represents
+      //       a chain which is invalid or less lucky than currently known best (latest) chain.
+      //       See: https://github.com/ipfs/go-ipfs/issues/3741
 
-    this._latestBlock.pinChain(previousLatestBlock)
+      this._latestBlock.pinChain(previousLatestBlock)
 
-    // We could yield, so we compare.
-    if (this._latestBlock !== block) {
-      return
-    }
+      // We could yield, so we compare.
+      if (this._latestBlock !== block) {
+        return
+      }
 
-    this._latestBlock.rememberInIPNS()
+      this._latestBlock.rememberInIPNS()
+    })
   }
 
   _updatePeers() {
-    var transactionsPeers = this.ipfs.pubsub.peersSync(this.getTransactionsTopic())
-    var blocksPeers = this.ipfs.pubsub.peersSync(this.getBlocksTopic())
+    // Not really serious if it would be called in parallel, but let us still prevent it.
+    // TODO: A call in parallel should just terminate instead of being queued.
+    FiberUtils.synchronize(this, '_updatePeers', () => {
+      var transactionsPeers = this.ipfs.pubsub.peersSync(this.getTransactionsTopic())
+      var blocksPeers = this.ipfs.pubsub.peersSync(this.getBlocksTopic())
 
-    var peers = _.union(transactionsPeers, blocksPeers)
+      var peers = _.union(transactionsPeers, blocksPeers)
 
-    var added = 0
-    var removed = 0
+      var added = 0
+      var removed = 0
 
-    for (var peer of peers) {
-      if (!this.peers.has(peer)) {
-        this.peers.set(peer, this.ipfs.idSync(peer))
-        added++
+      for (var peer of peers) {
+        if (!this.peers.has(peer)) {
+          this.peers.set(peer, this.ipfs.idSync(peer))
+          added++
+        }
       }
-    }
 
-    for (var peer of this.peers.keys()) {
-      if (_.indexOf(peers, peer) === -1) {
-        this.peers.delete(peer)
-        removed++
+      for (var peer of this.peers.keys()) {
+        if (_.indexOf(peers, peer) === -1) {
+          this.peers.delete(peer)
+          removed++
+        }
       }
-    }
 
-    if (added || removed) {
-      console.log(`Peers updated: ${added} added, ${removed} removed, ${this.peers.size} total`)
-      this.socketIo.emit('peersResult', this.getPeers())
-    }
+      if (added || removed) {
+        console.log(`Peers updated: ${added} added, ${removed} removed, ${this.peers.size} total`)
+        this.socketIo.emit('peersResult', this.getPeers())
+      }
+    })
   }
 
   /**
