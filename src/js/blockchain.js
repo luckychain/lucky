@@ -578,6 +578,8 @@ class Blockchain {
     var previousLatestBlock = this._latestBlock
     this._latestBlock = block
 
+    this.socketIo.emit('chainUpdated')
+
     if (this._roundBlock) {
       // If during a mining on a round block we get a better chain, we do not switch to mining on this better chain
       // if the parent of both blocks is the same. This can happen if the chain was prolonged and we start mining
@@ -609,8 +611,6 @@ class Blockchain {
     }
 
     this._latestBlock.rememberInIPNS()
-
-    this.socketIo.emit('chainUpdated')
   }
 
   _updatePeers() {
