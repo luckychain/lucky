@@ -52,8 +52,10 @@ class Home extends React.Component {
                       return link.Name === "transaction"
                     });
 
+                    var transactionsCount = transactions.length === 1 ? "1 transaction" : `${transactions.length} transactions`;
+
                     return (
-                      <Panel key={item.Hash} eventKey={item.Hash} header={(<h5>{item.Hash} ({transactions.length} transactions) <span className='pull-right'>{item.Data.Time}</span></h5>)}>
+                      <Panel key={item.Hash} eventKey={item.Hash} header={(<h5>{item.Hash} ({transactionsCount}) <span className='pull-right'>{item.Data.Time}</span></h5>)}>
                         <ButtonToolbar className="pull-right">
                           <a href={"https://gateway.ipfs.io/api/v0/object/get/" + item.Hash} className="btn btn-default btn-xs">Block Get</a>
                           <a href={"https://gateway.ipfs.io/api/v0/object/stat/" + item.Hash} className="btn btn-default btn-xs">Block Stat</a>
