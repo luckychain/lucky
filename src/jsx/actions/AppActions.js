@@ -53,4 +53,8 @@ socket.on('idResult', (body) => {
   actions.getBlockchainIdSuccess(body);
 });
 
+socket.on('chainUpdated', () => {
+  actions.getChain();
+});
+
 export default actions;

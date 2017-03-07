@@ -610,7 +610,7 @@ class Blockchain {
 
     this._latestBlock.rememberInIPNS()
 
-    this.socketIo.emit('chainResult', this.getChain())
+    this.socketIo.emit('chainUpdated')
   }
 
   _updatePeers() {
