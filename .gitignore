@@ -35,12 +35,11 @@ node_modules
 # Debug logs
 npm-debug.log.*
 
-public/javascripts/bundle.js
-public/stylesheets/bundle.css
-storage/block
-storage/transactions
-storage/pubsub.json
-storage/pubgrok
 .bash_profile
 .idea
-enclave/enclave-imports.js
+
+/public/javascripts/bundle.js
+/public/stylesheets/bundle.css
+/storage
+/enclave/enclave-imports.js
+/public/stylesheets/styles/style.css
