@@ -14,10 +14,10 @@ class App extends React.Component {
 
   componentDidMount() {
     AppStore.listen(this.onChange);
+    AppActions.getBlockchainId();
     AppActions.getChain();
     AppActions.getPeers();
-    AppActions.getPendingTransactions()
-    AppActions.getBlockchainId();
+    AppActions.getPendingTransactions();
   }
 
   componentWillUnmount() {
@@ -31,8 +31,8 @@ class App extends React.Component {
   render() {
     return (
       <div>
-        <Navbar/>
-        <div className="content">{React.cloneElement(this.props.children, {blocks: this.state.blocks, peers: this.state.peers, transactions: this.state.transactions, blockchainId: this.state.blockchainId})}</div>
+        <Navbar blockchainId={this.state.blockchainId} />
+        <div className="content">{React.cloneElement(this.props.children, {blocks: this.state.blocks, peers: this.state.peers, transactions: this.state.transactions})}</div>
         <Footer/>
       </div>
     );
