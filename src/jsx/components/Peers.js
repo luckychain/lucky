@@ -2,7 +2,6 @@ import React from 'react';
 import {Grid, Row, Col, Panel} from 'react-bootstrap';
 import PeersStore from '../stores/PeersStore';
 import PeersActions from '../actions/PeersActions';
-import PeerGraph from './PeerGraph'
 
 class Peers extends React.Component {
   constructor(props) {
@@ -27,13 +26,6 @@ class Peers extends React.Component {
   render() {
     return (
       <Grid>
-        <Row>
-          <Col sm={12}>
-            <Panel header="Block Explorer">
-              <PeerGraph peersStarGraph={this.state.peers}/>
-            </Panel>
-          </Col>
-        </Row>
         <Row>
           <Col sm={12}>
             <Panel header={(<span>Peers</span>)}>
