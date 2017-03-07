@@ -1,5 +1,5 @@
 import React from 'react';
-import {Grid, Row, Col, Panel, PanelGroup, Glyphicon, ListGroup} from 'react-bootstrap';
+import {Grid, Row, Col, Panel, PanelGroup, Glyphicon, ListGroup, ButtonToolbar} from 'react-bootstrap';
 import {withRouter} from 'react-router';
 import AppActions from '../actions/AppActions';
 import Transaction from './Transaction';
@@ -53,6 +53,12 @@ class Home extends React.Component {
                   blocks.map((item) => {
                     return (
                       <Panel key={item.Hash} eventKey={item.Hash} header={(<h5>{item.Hash}<span className='pull-right'>{item.Data.Time}</span></h5>)}>
+                        <ButtonToolbar className="pull-right">
+                          <a href={"https://gateway.ipfs.io/api/v0/object/get/" + item.Hash} className="btn btn-default btn-xs">Block Get</a>
+                          <a href={"https://gateway.ipfs.io/api/v0/object/stat/" + item.Hash} className="btn btn-default btn-xs">Block Stat</a>
+                          <a href={"https://gateway.ipfs.io/api/v0/object/get/" + item.Links[0].Hash} className="btn btn-default btn-xs">Payload Get</a>
+                          <a href={"https://gateway.ipfs.io/api/v0/object/stat/" + item.Links[0].Hash} className="btn btn-default btn-xs">Payload Stat</a>
+                        </ButtonToolbar>
                         <strong>Luck:</strong> {item.Data.Luck}<br/>
                         <strong>Miner:</strong> {item.Data.MinerId}<br/>
                         {this.renderTransactions(item)}
