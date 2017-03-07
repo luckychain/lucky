@@ -10,10 +10,7 @@ class Home extends React.Component {
     AppActions.flipOrder();
   }
 
-  renderTransactions(block) {
-    var transactions = block.Links[0].Content.Links.filter((link) => {
-      return link.Name === "transaction"
-    });
+  renderTransactions(transactions) {
     var transactionsElements;
     if (transactions.length) {
       transactionsElements = [
@@ -51,8 +48,12 @@ class Home extends React.Component {
               <PanelGroup accordion>
                 {
                   blocks.map((item) => {
+                    var transactions = item.Links[0].Content.Links.filter((link) => {
+                      return link.Name === "transaction"
+                    });
+
                     return (
-                      <Panel key={item.Hash} eventKey={item.Hash} header={(<h5>{item.Hash}<span className='pull-right'>{item.Data.Time}</span></h5>)}>
+                      <Panel key={item.Hash} eventKey={item.Hash} header={(<h5>{item.Hash} ({transactions.length} transactions) <span className='pull-right'>{item.Data.Time}</span></h5>)}>
                         <ButtonToolbar className="pull-right">
                           <a href={"https://gateway.ipfs.io/api/v0/object/get/" + item.Hash} className="btn btn-default btn-xs">Block Get</a>
                           <a href={"https://gateway.ipfs.io/api/v0/object/stat/" + item.Hash} className="btn btn-default btn-xs">Block Stat</a>
@@ -61,7 +62,7 @@ class Home extends React.Component {
                         </ButtonToolbar>
                         <strong>Luck:</strong> {item.Data.Luck}<br/>
                         <strong>Miner:</strong> {item.Data.MinerId}<br/>
-                        {this.renderTransactions(item)}
+                        {this.renderTransactions(transactions)}
                       </Panel>
                     );
                   })
