@@ -7,7 +7,6 @@ class AppActions {
       'initializeLocalState',
       'getChainSuccess',
       'getChainFail',
-      'goHome',
       'searchSubmit',
       'setActiveKey',
     );

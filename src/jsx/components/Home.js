@@ -10,7 +10,6 @@ class Home extends React.Component {
     super(props);
     this.state = HomeStore.getState();
     this.onChange = this.onChange.bind(this);
-    this.props.setActiveKey(this.props.params.blockHash);
   }
 
   componentDidMount() {
@@ -30,17 +29,6 @@ class Home extends React.Component {
     HomeActions.flipOrder();
   }
 
-  handleSelect(activeKey) {
-    if (activeKey === this.props.activeKey) {
-      this.props.router.push('/');
-      this.props.setActiveKey(null);
-    }
-    else {
-      this.props.router.push('/block/' + activeKey);
-      this.props.setActiveKey(activeKey);
-    }
-  }
-
   render() {
     var blocks = this.props.blocks;
     if (!this.state.sortDown) {
@@ -51,7 +39,7 @@ class Home extends React.Component {
         <Row>
           <Col sm={12}>
             <Panel header={(<span>Blockchain <Glyphicon glyph="sort" className='pull-right' style={{cursor:'pointer'}} onClick={this.flipOrder.bind(this)} />  </span>)}>
-              <PanelGroup activeKey={this.props.activeKey} onSelect={this.handleSelect.bind(this)} accordion>
+              <PanelGroup accordion>
                 {
                   blocks.map((item) => {
                     return (
