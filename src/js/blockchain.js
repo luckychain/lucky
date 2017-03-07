@@ -704,6 +704,10 @@ class Blockchain {
     // in parallel we are making it a critical section. This one prematurely ends when mining is canceled,
     // so there should not really be any calls queued.
     FiberUtils.synchronize(this, '_commitPendingTransactions', () => {
+      // TODO: IPFS objects are limited to 1 MB in size. We should take this into consideration.
+      //       We could for example take pop only as many pending transactions as they can get into 1 MB and leave others
+      //       for later blocks. Or we could support multiple payload objects per one block. Or (more backwards compatible)
+      //       payload could reference the next or more other payloads with a "payload" link among its links.
       var newTransactions = this._pendingTransactions
       this._pendingTransactions = []
 
