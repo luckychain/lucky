@@ -787,7 +787,7 @@ class Blockchain {
    */
   _onNewTransactionAddress(data, res) {
     if (!isIPFS.multihash(data)) {
-      res.status(400).json({error: "invalid"})
+      res.status(400).json({error: "invalid", message: "Not a valid IPFS address"})
       return
     }
 
@@ -795,7 +795,7 @@ class Blockchain {
     // but we do allow duplicate transactions across blocks.
     // This is an arbitrary design decision for this implementation.
     if (this.isPendingTransaction(data)) {
-      res.status(400).json({error: "pending"})
+      res.status(400).json({error: "pending", message: "Transaction is already pending"})
       return
     }
 
@@ -804,10 +804,10 @@ class Blockchain {
       console.log(`New transaction with address: ${data}`)
     }
     catch (error) {
-      res.status(400).json({error: "error"})
+      res.status(400).json({error: "error", message: `${error}`})
       throw error
     }
-    res.status(200).json({message: "success", address: data})
+    res.status(200).json({address: data})
   }
 
   /**
@@ -824,7 +824,7 @@ class Blockchain {
       this.ipfs.pin.addSync(response.toJSON().multihash, {recursive: false})
     }
     catch (error) {
-      res.status(400).json({error: "error"})
+      res.status(400).json({error: "error", message: `${error}`})
       throw error
     }
 
