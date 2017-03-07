@@ -5,15 +5,10 @@ class HomeStore {
   constructor() {
     this.bindActions(HomeActions);
     this.sortDown = true;
-    this.activeKey;
   }
 
   onFlipOrder() {
     this.sortDown = !this.sortDown;
-  }
-
-  onSetActiveKey(activeKey) {
-    this.activeKey = activeKey;
   }
 }
 

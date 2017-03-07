@@ -1,6 +1,5 @@
 import alt from '../alt';
 import AppActions from '../actions/AppActions';
-import {clone, map, find} from 'underscore';
 
 class AppStore {
   constructor() {

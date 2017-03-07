@@ -5,8 +5,6 @@ var io = require('socket.io-client');
 class NavbarActions {
   constructor() {
     this.generateActions(
-      'updateOnlineUsers',
-      'updateSearchQuery',
       'getBlockchainIdSuccess',
       'getBlockchainIdFail',
     );

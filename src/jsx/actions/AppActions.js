@@ -4,11 +4,8 @@ var io = require('socket.io-client');
 class AppActions {
   constructor() {
     this.generateActions(
-      'initializeLocalState',
       'getChainSuccess',
-      'getChainFail',
-      'searchSubmit',
-      'setActiveKey',
+      'getChainFail'
     );
   }
 
