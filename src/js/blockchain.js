@@ -601,7 +601,7 @@ class Blockchain {
     //       a chain which is invalid or less lucky than currently known best (latest) chain.
     //       See: https://github.com/ipfs/go-ipfs/issues/3741
 
-   this._latestBlock.pinChain(previousLatestBlock)
+    this._latestBlock.pinChain(previousLatestBlock)
 
     // We could yield, so we compare.
     if (this._latestBlock !== block) {
