@@ -7,7 +7,6 @@ class NavbarStore {
         this.totalTransactions = 0;
         this.onlineUsers = 0;
         this.searchQuery = '';
-        this.sgx = null;
         this.blockchainId = null;
     }
 
@@ -17,10 +16,6 @@ class NavbarStore {
 
     onUpdateSearchQuery(event) {
         this.searchQuery = event.target.value;
-    }
-
-    onGetSGXVersionSuccess(data) {
-        this.sgx = data;
     }
 
     onGetBlockchainIdSuccess(data) {

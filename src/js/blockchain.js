@@ -277,6 +277,8 @@ class Blockchain {
     this.node = node
     this.options = _.defaults(options || {}, DEFAULT_OPTIONS)
 
+    this.options.blockchainId = `${this.options.blockchainId}/${this.getSGXVersion() && !this.options.noSgx ? 'sgx' : 'mock'}`
+
     this._cache = new Map()
 
     this.ipfs = new IPFS(this.options.ipfsOptions)
@@ -341,6 +343,8 @@ class Blockchain {
   }
 
   start() {
+    console.log(`Starting ${this.options.blockchainId}`)
+
     this._getIPFSInfo()
     this._restoreFromIPNS()
     this._startPubSub()
@@ -372,6 +376,8 @@ class Blockchain {
 
   getSGXVersion() {
     // TODO: We should return SGX version (version of platform, enclave, etc.). And null for mock.
+    // TODO: We should pass this as part of the node's ID, and make it available as part of peers' ID.
+    //       See: https://github.com/ipfs/notes/issues/227
     return null
   }
 
@@ -393,10 +399,6 @@ class Blockchain {
         socket.emit('idResult', this.options.blockchainId)
       }, this, this._handleErrors))
 
-      socket.on('sgx', FiberUtils.in(() => {
-        socket.emit('sgxResult', this.getSGXVersion())
-      }, this, this._handleErrors))
-
       socket.on('peers', FiberUtils.in(() => {
         socket.emit('peersResult', this.getPeers())
       }, this, this._handleErrors))
@@ -413,12 +415,6 @@ class Blockchain {
     this.node.get("/api/v0/id", FiberUtils.in((req, res, next) => {
       res.status(200).json({
         id: this.options.blockchainId
-      })
-    }, this, this._handleErrors))
-
-    this.node.get("/api/v0/sgx", FiberUtils.in((req, res, next) => {
-      res.status(200).json({
-        sgx: this.getSGXVersion()
       })
     }, this, this._handleErrors))
 

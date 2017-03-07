@@ -7,19 +7,9 @@ class NavbarActions {
         this.generateActions(
             'updateOnlineUsers',
             'updateSearchQuery',
-            'getSGXVersionSuccess',
-            'getSGXVersionFail',
             'getBlockchainIdSuccess',
             'getBlockchainIdFail',
         );
-    }
-
-    getSGXVersion() {
-        this.socket = io();
-        this.socket.emit('sgx');
-        this.socket.on('sgxResult', (body) => {
-            this.actions.getSGXVersionSuccess(body);
-        });
     }
 
     getBlockchainId() {
