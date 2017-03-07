@@ -14,8 +14,8 @@ class Navbar extends React.Component {
           <ul className='nav navbar-nav'>
             <li><Link to='/'>Home</Link></li>
             <li><Link to='/add'>Add Transaction</Link></li>
-            <li><Link to='/pending'>Pending Transactions</Link></li>
-            <li><Link to='/peers'>Peers</Link></li>
+            <li><Link to='/pending'>Pending Transactions<span className='badge badge-up badge-danger'>{this.props.transactions.length}</span></Link></li>
+            <li><Link to='/peers'>Peers<span className='badge badge-up badge-info'>{this.props.peers.length}</span></Link></li>
           </ul>
         </div>
       </div>
