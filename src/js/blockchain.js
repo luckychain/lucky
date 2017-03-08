@@ -189,6 +189,8 @@ class Block extends Node {
 
     // Forces fetch of the payload and its validation.
     this.getPayload()
+
+    this._validatedChain = false
   }
 
   getPayloadLink() {
@@ -256,12 +258,17 @@ class Block extends Node {
   }
 
   validateChain() {
+    if (this._validatedChain) {
+      return
+    }
+
     var allSize = this.getCumulativeSize()
     var lastReported = new Date()
     var reported = false
 
     try {
-      for (var parent = this.getParent(); parent; parent = parent.getParent()) {
+      // We can stop if we reached any block which has had its chain validated.
+      for (var parent = this.getParent(); parent && !parent._validatedChain; parent = parent.getParent()) {
         // If during processing of a chain we get to another chain being processed,
         // we wait for that one to finish first.
         var uniqueId = `_onBlock/${parent.address}`
@@ -273,6 +280,11 @@ class Block extends Node {
           }
         }
 
+        // If we waited for the parent's chain to be processed, it is now validated and we can break.
+        if (parent._validatedChain) {
+          break
+        }
+
         var timestamp = new Date()
         if (timestamp.valueOf() - lastReported.valueOf() > 120 * 1000) { // ms
           reported = true
@@ -280,6 +292,12 @@ class Block extends Node {
           var sizeProcessed = allSize - (parent.getCumulativeSize() - parent.getBlockSize() - parent.getPayload().getBlockSize())
           console.log(`Processing chain ${this.address}, ${sizeProcessed} of ${allSize} bytes, ${Math.round(sizeProcessed / allSize * 10000) / 100}%`)
         }
+      }
+
+      // We got to the end of the chain, or to an already validated chain. We can
+      // now mark all blocks until there as having a validated chain validated as well.
+      for (var parent = this.getParent(); parent && !parent._validatedChain; parent = parent.getParent()) {
+        parent._validatedChain = true
       }
 
       if (reported) {
@@ -294,6 +312,8 @@ class Block extends Node {
       // Code calling this method will log the error.
       throw error
     }
+
+    this._validatedChain = true
   }
 
   pinChain(previousLatestBlock) {
