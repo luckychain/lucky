@@ -6,6 +6,7 @@ var isIPFS = require('is-ipfs')
 var bs58 = require('bs58')
 var dagPB = require('ipld-dag-pb')
 var enclave = require('./enclave')
+var Fiber = require('fibers')
 var FiberUtils = require('./fiber-utils')
 var clone = require('clone')
 
@@ -184,11 +185,43 @@ class Block extends Node {
       throw new Error("Proof's payload does not match block's payload")
     }
 
-    // Creating payload and parent objects validates them as well.
-    // This happens recursively over the whole chain. Because objects are cached we do not
-    // have to necessary recompute and validate the whole chain again and again.
-    this.getPayload()
-    this.getParent()
+    var topBlock = false
+    var timestamp = new Date()
+    var reported = false
+    var constructingBlock = Fiber.current._constructingBlock
+    if (constructingBlock) {
+      if (timestamp.valueOf() - constructingBlock.lastReported.valueOf() > 120 * 1000) { // ms
+        reported = true
+        constructingBlock.lastReported = timestamp
+        var sizeDownloaded = constructingBlock.size - this.getCumulativeSize() + this.getBlockSize()
+        console.log(`Downloading chain ${constructingBlock.hash}, ${sizeDownloaded} of ${constructingBlock.size} bytes, ${Math.round(sizeDownloaded / constructingBlock.size * 10000) / 100}%`)
+      }
+    }
+    else {
+      Fiber.current._constructingBlock = {
+        hash: this.address,
+        size: this.getCumulativeSize(),
+        timestamp: timestamp,
+        lastReported: timestamp
+      }
+      topBlock = true
+    }
+
+    try {
+      // Creating payload and parent objects validates them as well.
+      // This happens recursively over the whole chain. Because objects are cached we do not
+      // have to necessary recompute and validate the whole chain again and again.
+      this.getPayload()
+      this.getParent()
+    }
+    finally {
+      if (topBlock) {
+        if (reported) {
+          console.log(`Chain ${constructingBlock.hash} downloaded`)
+        }
+        delete Fiber.current._constructingBlock
+      }
+    }
 
     this.chainLength = this._computeChainLength()
     this.chainLuck = this._computeChainLuck()
