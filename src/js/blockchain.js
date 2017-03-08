@@ -6,7 +6,6 @@ var isIPFS = require('is-ipfs')
 var bs58 = require('bs58')
 var dagPB = require('ipld-dag-pb')
 var enclave = require('./enclave')
-var Fiber = require('fibers')
 var FiberUtils = require('./fiber-utils')
 var clone = require('clone')
 
@@ -91,6 +90,8 @@ class Node {
 }
 
 class Payload extends Node {
+  // Constructor validates only the payload.
+  // It throws an exception if anything is invalid.
   constructor(blockchain, object, address) {
     super(blockchain, object, address)
 
@@ -148,7 +149,8 @@ class Payload extends Node {
 }
 
 class Block extends Node {
-  // Constructor validates the block and its whole chain and throws an exception if anything is invalid.
+  // Constructor validates only the block and not its whole chain.
+  // It throws an exception if anything is invalid.
   constructor(blockchain, object, address) {
     super(blockchain, object, address)
 
@@ -185,46 +187,8 @@ class Block extends Node {
       throw new Error("Proof's payload does not match block's payload")
     }
 
-    var topBlock = false
-    var timestamp = new Date()
-    var reported = false
-    var constructingBlock = Fiber.current._constructingBlock
-    if (constructingBlock) {
-      if (timestamp.valueOf() - constructingBlock.lastReported.valueOf() > 120 * 1000) { // ms
-        reported = true
-        constructingBlock.lastReported = timestamp
-        var sizeDownloaded = constructingBlock.size - this.getCumulativeSize() + this.getBlockSize()
-        console.log(`Downloading chain ${constructingBlock.hash}, ${sizeDownloaded} of ${constructingBlock.size} bytes, ${Math.round(sizeDownloaded / constructingBlock.size * 10000) / 100}%`)
-      }
-    }
-    else {
-      Fiber.current._constructingBlock = {
-        hash: this.address,
-        size: this.getCumulativeSize(),
-        timestamp: timestamp,
-        lastReported: timestamp
-      }
-      topBlock = true
-    }
-
-    try {
-      // Creating payload and parent objects validates them as well.
-      // This happens recursively over the whole chain. Because objects are cached we do not
-      // have to necessary recompute and validate the whole chain again and again.
-      this.getPayload()
-      this.getParent()
-    }
-    finally {
-      if (topBlock) {
-        if (reported) {
-          console.log(`Chain ${constructingBlock.hash} downloaded`)
-        }
-        delete Fiber.current._constructingBlock
-      }
-    }
-
-    this.chainLength = this._computeChainLength()
-    this.chainLuck = this._computeChainLuck()
+    // Forces fetch of the payload and its validation.
+    this.getPayload()
   }
 
   getPayloadLink() {
@@ -265,7 +229,12 @@ class Block extends Node {
   }
 
   getChainLength() {
-    return this.chainLength
+    // Using == on purpose.
+    if (this._chainLength == null) {
+      this._chainLength = this._computeChainLength()
+    }
+
+    return this._chainLength
   }
 
   _computeChainLuck() {
@@ -278,7 +247,42 @@ class Block extends Node {
   }
 
   getChainLuck() {
-    return this.chainLuck
+    // Using == on purpose.
+    if (this._chainLuck == null) {
+      this._chainLuck = this._computeChainLuck()
+    }
+
+    return this._chainLuck
+  }
+
+  validateChain() {
+    var allSize = this.getCumulativeSize()
+    var lastReported = new Date()
+    var reported = false
+
+    try {
+      for (var parent = this.getParent(); parent; parent = parent.getParent()) {
+        var timestamp = new Date()
+        if (timestamp.valueOf() - lastReported.valueOf() > 120 * 1000) { // ms
+          reported = true
+          lastReported = timestamp
+          var sizeProcessed = allSize - (parent.getCumulativeSize() - parent.getBlockSize() - parent.getPayload().getBlockSize())
+          console.log(`Processing chain ${this.address}, ${sizeProcessed} of ${allSize} bytes, ${Math.round(sizeProcessed / allSize * 10000) / 100}%`)
+        }
+      }
+
+      if (reported) {
+        console.log(`Chain ${this.address} processed`)
+      }
+    }
+    catch (error) {
+      if (reported) {
+        console.log(`Processing of chain ${this.address} failed`)
+      }
+
+      // Code calling this method will log the error.
+      throw error
+    }
   }
 
   pinChain(previousLatestBlock) {
@@ -633,8 +637,10 @@ class Blockchain {
   _onBlock(blockAddress) {
     // We synchronize based on the argument to prevent executing the method for the same argument in parallel.
     FiberUtils.synchronize(this, `_onBlock/${blockAddress}`, () => {
-      // Block constructor also validates the whole chain.
       var block = this.getBlock(blockAddress)
+
+      // Validation also downloads the whole chain into our cache.
+      block.validateChain()
 
       // getBlock can yield, but it does not matter, we can still compare.
       if (this._latestBlock && block.getChainLuck() <= this._latestBlock.getChainLuck()) {
