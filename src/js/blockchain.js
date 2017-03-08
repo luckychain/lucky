@@ -265,9 +265,9 @@ class Block extends Node {
         // If during processing of a chain we get to another chain being processed,
         // we wait for that one to finish first.
         var uniqueId = `_onBlock/${parent.address}`
-        var quards = this.blockchain._guards
-        if (quards[uniqueId]) {
-          quards[uniqueId].exit(quards[uniqueId].enter())
+        var guards = this.blockchain._guards
+        if (guards[uniqueId]) {
+          guards[uniqueId].exit(guards[uniqueId].enter())
           if (guards[uniqueId] && !guards[uniqueId].isInUse()) {
             delete guards[uniqueId]
           }
