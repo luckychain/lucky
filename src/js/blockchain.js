@@ -262,6 +262,17 @@ class Block extends Node {
 
     try {
       for (var parent = this.getParent(); parent; parent = parent.getParent()) {
+        // If during processing of a chain we get to another chain being processed,
+        // we wait for that one to finish first.
+        var uniqueId = `_onBlock/${parent.address}`
+        var quards = this.blockchain._guards
+        if (quards[uniqueId]) {
+          quards[uniqueId].exit(quards[uniqueId].enter())
+          if (guards[uniqueId] && !guards[uniqueId].isInUse()) {
+            delete guards[uniqueId]
+          }
+        }
+
         var timestamp = new Date()
         if (timestamp.valueOf() - lastReported.valueOf() > 120 * 1000) { // ms
           reported = true
