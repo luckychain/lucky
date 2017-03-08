@@ -313,13 +313,8 @@ class Block extends Node {
         block = block.getParent()
       }
 
-      for (var address of _.difference(newChainIDs, previousChainIDs)) {
-        this.blockchain.ipfs.pin.addSync(address, {recursive: false})
-      }
-
-      for (var address of _.difference(previousChainIDs, newChainIDs)) {
-        this.blockchain.ipfs.pin.rmSync(address, {recursive: false})
-      }
+      this.blockchain.ipfs.pin.addSync(_.difference(newChainIDs, previousChainIDs), {recursive: false})
+      this.blockchain.ipfs.pin.rmSync(_.difference(previousChainIDs, newChainIDs), {recursive: false})
     })
   }
 
