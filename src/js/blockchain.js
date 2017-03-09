@@ -854,6 +854,7 @@ class Blockchain {
       var proof = null
 
       try {
+        // We have to wait before the enclave releases the proof.
         proof = result.future.wait()
         // If mining was canceled.
         if (!proof) {
