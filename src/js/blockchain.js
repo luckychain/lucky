@@ -222,6 +222,8 @@ class Block extends Node {
   }
 
   _computeChainLength() {
+    assert(this._validatedChain, "_computeChainLength on non-validated chain")
+
     var length = 1
     var parent = this.getParent()
     if (parent) {
@@ -240,6 +242,8 @@ class Block extends Node {
   }
 
   _computeChainLuck() {
+    assert(this._validatedChain, "_computeChainLuck on non-validated chain")
+
     var luck = this.getLuck()
     var parent = this.getParent()
     if (parent) {
