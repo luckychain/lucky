@@ -26,7 +26,8 @@ var DEFAULT_OPTIONS = {
     protocol: "http"
   },
   blockchainId: BLOCKCHAIN_ID,
-  peersUpdateInterval: 15 // s
+  peersUpdateInterval: 15, // s
+  latestBlockHash: null
 }
 
 class Node {
@@ -907,6 +908,10 @@ class Blockchain {
 
   _restoreFromIPNS() {
     // TODO: Implement. Set this._latestBlock to the block from IPNS.
+    // Override.
+    if (this.options.latestBlockHash) {
+      this._latestBlock = this.getBlock(this.options.latestBlockHash)
+    }
   }
 
   _startMining() {
