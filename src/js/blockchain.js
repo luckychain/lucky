@@ -371,7 +371,17 @@ class Block extends Node {
         this.blockchain.ipfs.pin.addSync(add.slice(i, i + 5000), {recursive: false})
       }
       for (var i = 0; i < remove.length; i += 5000) {
-        this.blockchain.ipfs.pin.rmSync(remove.slice(i, i + 5000), {recursive: false})
+        try {
+          this.blockchain.ipfs.pin.rmSync(remove.slice(i, i + 5000), {recursive: false})
+        }
+        catch (error) {
+          // We ignore the error that something is not pinned.
+          // TODO: Improve how we are handling pinning errors because it might be that not everything else got unpinned.
+          //       See: https://github.com/ipfs/interface-ipfs-core/issues/127
+          if (!/not pinned/.test(`${error}`)) {
+            throw error
+          }
+        }
       }
     })
   }
