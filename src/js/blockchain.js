@@ -244,31 +244,31 @@ class Block extends Node {
       return
     }
 
-    var previousBlock
-    var block
+    var childBlock
+    var parentBlock
     var allSize = this.getCumulativeSize()
     var lastReported = new Date()
     var reported = false
 
     try {
-      for (previousBlock = this, block = this.getParent(); block; previousBlock = block, block = block.getParent()) {
+      for (childBlock = this, parentBlock = this.getParent(); parentBlock; childBlock = parentBlock, parentBlock = parentBlock.getParent()) {
         // The order of operations has to match how chain luck is computed when building
         // a block because floating point addition is not commutative.
-        if (previousBlock.getChainLength() !== block.getChainLength() + 1) {
+        if (childBlock.getChainLength() !== parentBlock.getChainLength() + 1) {
           throw new Error("Chain length does not match between blocks")
         }
-        if (previousBlock.getChainLuck() !== block.getChainLuck() + block.getLuck()) {
+        if (childBlock.getChainLuck() !== parentBlock.getChainLuck() + childBlock.getLuck()) {
           throw new Error("Chain luck does not match between blocks")
         }
 
         // We can stop if we reached any block which has had its chain validated.
-        if (block._validatedChain) {
+        if (parentBlock._validatedChain) {
           break
         }
 
         // If during processing of a chain we get to another chain being processed,
         // we wait for that one to finish first.
-        var uniqueId = `_onBlock/${block.address}`
+        var uniqueId = `_onBlock/${parentBlock.address}`
         var guards = this.blockchain._guards
         if (guards[uniqueId]) {
           guards[uniqueId].exit(guards[uniqueId].enter())
@@ -278,7 +278,7 @@ class Block extends Node {
         }
 
         // If we waited for the block's chain to be processed, it is now validated and we can break.
-        if (block._validatedChain) {
+        if (parentBlock._validatedChain) {
           break
         }
 
@@ -286,13 +286,13 @@ class Block extends Node {
         if (timestamp.valueOf() - lastReported.valueOf() > 120 * 1000) { // ms
           reported = true
           lastReported = timestamp
-          var sizeProcessed = allSize - (block.getCumulativeSize() - block.getBlockSize() - block.getPayload().getBlockSize())
+          var sizeProcessed = allSize - (parentBlock.getCumulativeSize() - parentBlock.getBlockSize() - parentBlock.getPayload().getBlockSize())
           console.log(`Processing chain ${this.address}, ${sizeProcessed} of ${allSize} bytes, ${Math.round(sizeProcessed / allSize * 10000) / 100}%`)
         }
       }
 
       // Cover the edge case for a genesis block.
-      if (!block) {
+      if (!parentBlock) {
         assert(!this.getParentLink(), "No parent but parent link")
 
         if (this.getChainLength() !== 1) {
@@ -305,8 +305,8 @@ class Block extends Node {
 
       // We got to the end of the chain, or to an already validated chain. We can
       // now mark all blocks until there as having a validated chain validated as well.
-      for (block = this.getParent(); block && !block._validatedChain; block = block.getParent()) {
-        block._validatedChain = true
+      for (parentBlock = this.getParent(); parentBlock && !parentBlock._validatedChain; parentBlock = parentBlock.getParent()) {
+        parentBlock._validatedChain = true
       }
 
       if (reported) {
