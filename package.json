@@ -25,6 +25,7 @@
     "ipld-dag-pb": "^0.9.5",
     "is-ipfs": "^0.3.0",
     "less": "^2.7.2",
+    "lru-cache": "^4.0.2",
     "multihashing-async": "git://github.com/multiformats/js-multihashing-async.git#154001d3c0b4e0b51a838af934b47fa09fd8417a",
     "node-uuid": "^1.4.7",
     "react": "^0.14.2",

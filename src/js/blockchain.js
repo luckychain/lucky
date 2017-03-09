@@ -8,6 +8,7 @@ var dagPB = require('ipld-dag-pb')
 var enclave = require('./enclave')
 var FiberUtils = require('./fiber-utils')
 var clone = require('clone')
+var LRU = require('lru-cache')
 
 Error.stackTraceLimit = 100
 
@@ -27,7 +28,9 @@ var DEFAULT_OPTIONS = {
   },
   blockchainId: BLOCKCHAIN_ID,
   peersUpdateInterval: 15, // s
-  latestBlockHash: null
+  latestBlockHash: null,
+  maxObjectCacheSize: 500 * 1024 * 1024, // B
+  maxValidationCacheSize: 100 * 1024 * 1024 // B
 }
 
 class Node {
@@ -50,6 +53,7 @@ class Node {
       }
     })
 
+    // TODO: We could cache size as a value in _validatedChains cache.
     var dagNode = DAGNodeCreateSync(this.object.Data, this.object.Links, 'sha2-256')
     this._size = dagNode.serialized.length
 
@@ -155,6 +159,9 @@ class Block extends Node {
   constructor(blockchain, object, address) {
     super(blockchain, object, address)
 
+    // Maybe we validated it before, but cached node expired.
+    this._validatedChain = address && this.blockchain._validatedChains.get(address) || false
+
     if (this.object.Links.length !== 1 || this.object.Links[0].Name !== "payload") {
       throw new Error("Exactly one link, payload, is required")
     }
@@ -184,23 +191,24 @@ class Block extends Node {
     this.data.Proof.Quote = new Uint8Array(bs58.decode(this.data.Proof.Quote)).buffer
     this.data.Time = new Date(this.data.Time)
 
-    if (!enclaveInstance.teeValidateRemoteAttestation(this.data.Proof.Quote, this.data.Proof.Attestation)) {
-      throw new Error("Invalid attestation")
+    // Chain could be validated before.
+    if (!this._validatedChain) {
+      if (!enclaveInstance.teeValidateRemoteAttestation(this.data.Proof.Quote, this.data.Proof.Attestation)) {
+        throw new Error("Invalid attestation")
+      }
+
+      var nonce = enclaveInstance.teeProofOfLuckNonce(this.data.Proof.Quote)
+
+      if (nonce.luck !== this.data.Luck) {
+        throw new Error("Proof's luck does not match block's luck")
+      }
+      if (nonce.hash !== this.getPayloadLink()) {
+        throw new Error("Proof's payload does not match block's payload")
+      }
+
+      // Forces fetch of the payload and its validation.
+      this.getPayload()
     }
-
-    var nonce = enclaveInstance.teeProofOfLuckNonce(this.data.Proof.Quote)
-
-    if (nonce.luck !== this.data.Luck) {
-      throw new Error("Proof's luck does not match block's luck")
-    }
-    if (nonce.hash !== this.getPayloadLink()) {
-      throw new Error("Proof's payload does not match block's payload")
-    }
-
-    // Forces fetch of the payload and its validation.
-    this.getPayload()
-
-    this._validatedChain = false
   }
 
   getPayloadLink() {
@@ -237,6 +245,11 @@ class Block extends Node {
 
   getParent() {
     return this.getPayload().getParent()
+  }
+
+  _setValidatedChain() {
+    this.blockchain._validatedChains.set(this.address, true)
+    this._validatedChain = true
   }
 
   validateChain() {
@@ -306,7 +319,7 @@ class Block extends Node {
       // We got to the end of the chain, or to an already validated chain. We can
       // now mark all blocks until there as having a validated chain validated as well.
       for (parentBlock = this.getParent(); parentBlock && !parentBlock._validatedChain; parentBlock = parentBlock.getParent()) {
-        parentBlock._validatedChain = true
+        parentBlock._setValidatedChain()
       }
 
       if (reported) {
@@ -322,7 +335,7 @@ class Block extends Node {
       throw error
     }
 
-    this._validatedChain = true
+    this._setValidatedChain()
   }
 
   pinChain(previousLatestBlock) {
@@ -370,11 +383,26 @@ class Block extends Node {
 class Blockchain {
   constructor(node, options) {
     this.node = node
-    this.options = _.defaults(options || {}, DEFAULT_OPTIONS)
+
+    // Remove NaN values which are set by yargs when option could not be parsed into a number.
+    options = _.omit(options || {}, _.isNaN)
+
+    this.options = _.defaults(options, DEFAULT_OPTIONS)
 
     this.options.blockchainId = `${this.options.blockchainId}/${this.getSGXVersion() && !this.options.noSgx ? 'sgx' : 'mock'}`
 
-    this._cache = new Map()
+    this._cache = LRU({
+      max: this.options.maxObjectCacheSize,
+      length: (value, key) => {
+        return key.length + value.getBlockSize()
+      }
+    })
+    this._validatedChains = new LRU({
+      max: this.options.maxValidationCacheSize,
+      length: (value, key) => {
+        return key.length
+      }
+    })
 
     this.ipfs = new IPFS(this.options.ipfsOptions)
 
