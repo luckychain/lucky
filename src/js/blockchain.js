@@ -170,6 +170,15 @@ class Block extends Node {
     if (!_.isString(this.data.Time)) {
       throw new Error("Invalid timestamp")
     }
+    if (!isIPFS.multihash(this.data.MinerId)) {
+      throw new Error("Invalid miner ID")
+    }
+    if (!_.isFinite(this.data.ChainLength)) {
+      throw new Error(`Invalid chain length: ${this.data.ChainLength}`)
+    }
+    if (!_.isFinite(this.data.ChainLuck)) {
+      throw new Error(`Invalid chain luck: ${this.data.ChainLuck}`)
+    }
 
     this.data.Proof.Attestation = new Uint8Array(bs58.decode(this.data.Proof.Attestation)).buffer
     this.data.Proof.Quote = new Uint8Array(bs58.decode(this.data.Proof.Quote)).buffer
@@ -192,8 +201,6 @@ class Block extends Node {
     this.getPayload()
 
     this._validatedChain = false
-    this._chainLength = null
-    this._chainLuck = null
   }
 
   getPayloadLink() {
@@ -216,6 +223,14 @@ class Block extends Node {
     return this.data.MinerId
   }
 
+  getChainLength() {
+    return this.data.ChainLength
+  }
+
+  getChainLuck() {
+    return this.data.ChainLuck
+  }
+
   getParentLink() {
     return this.getPayload().getParentLink()
   }
@@ -224,33 +239,33 @@ class Block extends Node {
     return this.getPayload().getParent()
   }
 
-  getChainLength() {
-    assert(this._validatedChain, "computeChainLength on non-validated chain")
-
-    return this._chainLength
-  }
-
-  getChainLuck() {
-    assert(this._validatedChain, "computeChainLuck on non-validated chain")
-
-    return this._chainLuck
-  }
-
   validateChain() {
     if (this._validatedChain) {
       return
     }
 
+    var previousBlock
     var block
     var allSize = this.getCumulativeSize()
     var lastReported = new Date()
     var reported = false
 
     try {
-      var chain = []
+      for (previousBlock = this, block = this.getParent(); block; previousBlock = block, block = block.getParent()) {
+        // The order of operations has to match how chain luck is computed when building
+        // a block because floating point addition is not commutative.
+        if (previousBlock.getChainLength() !== block.getChainLength() + 1) {
+          throw new Error("Chain length does not match between blocks")
+        }
+        if (previousBlock.getChainLuck() !== block.getChainLuck() + block.getLuck()) {
+          throw new Error("Chain luck does not match between blocks")
+        }
 
-      // We can stop if we reached any block which has had its chain validated.
-      for (block = this.getParent(); block && !block._validatedChain; block = block.getParent()) {
+        // We can stop if we reached any block which has had its chain validated.
+        if (block._validatedChain) {
+          break
+        }
+
         // If during processing of a chain we get to another chain being processed,
         // we wait for that one to finish first.
         var uniqueId = `_onBlock/${block.address}`
@@ -267,8 +282,6 @@ class Block extends Node {
           break
         }
 
-        chain.push(block)
-
         var timestamp = new Date()
         if (timestamp.valueOf() - lastReported.valueOf() > 120 * 1000) { // ms
           reported = true
@@ -278,33 +291,22 @@ class Block extends Node {
         }
       }
 
+      // Cover the edge case for a genesis block.
+      if (!block) {
+        assert(!this.getParentLink(), "No parent but parent link")
+
+        if (this.getChainLength() !== 1) {
+          throw new Error("Genesis block's chain length is not 1")
+        }
+        if (this.getChainLuck() !== this.getLuck()) {
+          throw new Error("Genesis block's chain luck is not its luck")
+        }
+      }
+
       // We got to the end of the chain, or to an already validated chain. We can
-      // now mark all blocks until there as having a validated chain validated as well,
-      // and compute chain luck and chain length.
-
-      if (chain.length) {
-        var currentLength = 0
-        var currentLuck = 0
-        var lastBlock = chain[chain.length - 1]
-
-        if (lastBlock.getParentLink()) {
-          currentLength = lastBlock.getParent().getChainLength()
-          currentLuck = lastBlock.getParent().getChainLuck()
-        }
-
-        for (var i = chain.length - 1; i >= 0; i--) {
-          block = chain[i]
-
-          assert(!block._validatedChain, "block._validatedChain already set")
-
-          currentLength += 1
-          currentLuck += block.getLuck()
-
-          block._chainLength = currentLength
-          block._chainLuck = currentLuck
-          block._validatedChain = true
-        }
-
+      // now mark all blocks until there as having a validated chain validated as well.
+      for (block = this.getParent(); block && !block._validatedChain; block = block.getParent()) {
+        block._validatedChain = true
       }
 
       if (reported) {
@@ -320,12 +322,6 @@ class Block extends Node {
       throw error
     }
 
-    block = this.getParent()
-
-    assert(!this._validatedChain, "this._validatedChain already set")
-
-    this._chainLength = (block ? block.getChainLength() : 0) + 1
-    this._chainLuck = (block ? block.getChainLuck() : 0) + this.getLuck()
     this._validatedChain = true
   }
 
@@ -884,7 +880,9 @@ class Blockchain {
           // Not trusted miner ID.
           // TODO: Make peer sign the block, so that the identity cannot be forged.
           //       See: https://github.com/ipfs/interface-ipfs-core/issues/120
-          MinerId: this.ipfsInfo.id
+          MinerId: this.ipfsInfo.id,
+          ChainLength: latestBlock ? latestBlock.getChainLength() + 1 : 1,
+          ChainLuck: latestBlock ? latestBlock.getChainLuck() + nonce.luck : nonce.luck
         }),
         Links: [{
           Name: "payload",
