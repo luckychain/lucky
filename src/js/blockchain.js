@@ -345,8 +345,15 @@ class Block extends Node {
         block = block.getParent()
       }
 
-      this.blockchain.ipfs.pin.addSync(_.difference(newChainIDs, previousChainIDs), {recursive: false})
-      this.blockchain.ipfs.pin.rmSync(_.difference(previousChainIDs, newChainIDs), {recursive: false})
+      var add = _.difference(newChainIDs, previousChainIDs)
+      var remove = _.difference(previousChainIDs, newChainIDs)
+
+      for (var i = 0; i < add.length; i += 5000) {
+        this.blockchain.ipfs.pin.addSync(add.slice(i, i + 5000), {recursive: false})
+      }
+      for (var i = 0; i < remove.length; i += 5000) {
+        this.blockchain.ipfs.pin.rmSync(remove.slice(i, i + 5000), {recursive: false})
+      }
     })
   }
 
