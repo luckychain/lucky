@@ -833,7 +833,7 @@ class Blockchain {
     // so there should not really be any calls queued.
     FiberUtils.synchronize(this, '_commitPendingTransactions', () => {
       // TODO: IPFS objects are limited to 1 MB in size. We should take this into consideration.
-      //       We could for example take pop only as many pending transactions as they can get into 1 MB and leave others
+      //       We could for example take only as many pending transactions as they can get into 1 MB and leave others
       //       for later blocks. Or we could support multiple payload objects per one block. Or (more backwards compatible)
       //       payload could reference the next or more other payloads with a "payload" link among its links.
       var newTransactions = this._pendingTransactions
@@ -885,9 +885,12 @@ class Blockchain {
       })
 
       if (!result) {
-        // TODO: What should we do with our pending transactions? What if they were not included in the winning block?
-        //       Should we try to put them back to be mined with the next block? But how to prevent/detect duplicates
-        //       because currently we allow same transactions in the chain, but just not in the same block.
+        // TODO: What should we do with our pending transactions? What if they were not included in the latest winning block?
+        //       Should we try to put them back to be mined with the next block? But how to know which were really omitted
+        //       and which were added in some a bit older block in the winning chain? We allow duplicates between blocks,
+        //       so the same transaction could be in the past because it was added to the blockchain independently. Or it
+        //       it could be in the past because it was added before we tried to do it here now. We also do not want to
+        //       parse the whole chain to discover if a transaction is in the chain at all.
         return
       }
 
@@ -901,9 +904,12 @@ class Blockchain {
         proof = result.future.wait()
         // If mining was canceled.
         if (!proof) {
-          // TODO: What should we do with our pending transactions? What if they were not included in the winning block?
-          //       Should we try to put them back to be mined with the next block? But how to prevent/detect duplicates
-          //       because currently we allow same transactions in the chain, but just not in the same block.
+          // TODO: What should we do with our pending transactions? What if they were not included in the latest winning block?
+          //       Should we try to put them back to be mined with the next block? But how to know which were really omitted
+          //       and which were added in some a bit older block in the winning chain? We allow duplicates between blocks,
+          //       so the same transaction could be in the past because it was added to the blockchain independently. Or it
+          //       it could be in the past because it was added before we tried to do it here now. We also do not want to
+          //       parse the whole chain to discover if a transaction is in the chain at all.
           return
         }
       }
@@ -949,6 +955,13 @@ class Blockchain {
       console.log(`New block mined: ${newBlock}`)
 
       this.socketIo.emit('pendingResult', this.getPendingTransactions())
+
+      // TODO: What should we do with transactions in our block if it does not win, but they were not included in the latest winning block?
+      //       Should we try to put them back to be mined with the next block? But how to know which were really omitted
+      //       and which were added in some a bit older block in the winning chain? We allow duplicates between blocks,
+      //       so the same transaction could be in the past because it was added to the blockchain independently. Or it
+      //       it could be in the past because it was added before we tried to do it here now. We also do not want to
+      //       parse the whole chain to discover if a transaction is in the chain at all.
     })
   }
 
@@ -1004,9 +1017,8 @@ class Blockchain {
       return
     }
 
-    // We do not want duplicate transactions in the same block,
-    // but we do allow duplicate transactions across blocks.
-    // This is an arbitrary design decision for this implementation.
+    // We do not want duplicate transactions in the same block, but we do allow duplicate transactions across blocks.
+    // This is an arbitrary design decision for this implementation to not have to remember all existing transactions.
     if (this.isPendingTransaction(data)) {
       res.status(400).json({error: "pending", message: "Transaction is already pending"})
       return
