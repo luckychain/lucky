@@ -22,7 +22,7 @@ var DEFAULT_OPTIONS = {
   clientPort: 8000,
   ipfsOptions: {
     host: "localhost",
-    port: "5001",
+    port: 5001,
     protocol: "http"
   },
   blockchainId: BLOCKCHAIN_ID,
