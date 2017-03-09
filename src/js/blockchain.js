@@ -913,6 +913,7 @@ class Blockchain {
       console.log(`Starting with the latest block: ${this.options.latestBlockHash}`)
       var block = this.getBlock(this.options.latestBlockHash)
       block.validateChain()
+      console.log(`The latest block: ${block.toString()}`)
       this._latestBlock = block
     }
   }
