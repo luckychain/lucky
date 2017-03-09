@@ -61,8 +61,10 @@ class Home extends React.Component {
                             <a href={"https://gateway.ipfs.io/api/v0/object/get/" + item.Links[0].Hash} className="btn btn-default btn-xs">Payload Get</a>
                             <a href={"https://gateway.ipfs.io/api/v0/object/stat/" + item.Links[0].Hash} className="btn btn-default btn-xs">Payload Stat</a>
                           </ButtonToolbar>
-                          <strong>Luck:</strong> {item.Data.Luck}<br/>
-                          <strong>Miner:</strong> {item.Data.MinerId}<br/>
+                          <strong>Block luck:</strong> {item.Data.Luck}<br/>
+                          <strong>Block miner:</strong> {item.Data.MinerId}<br/>
+                          <strong>Chain luck:</strong> {item.Data.ChainLuck}<br/>
+                          <strong>Chain length:</strong> {item.Data.ChainLength}<br/>
                           {this.renderTransactions(transactions)}
                         </Panel>
                       );
