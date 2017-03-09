@@ -910,7 +910,10 @@ class Blockchain {
     // TODO: Implement. Set this._latestBlock to the block from IPNS.
     // Override.
     if (this.options.latestBlockHash) {
-      this._latestBlock = this.getBlock(this.options.latestBlockHash)
+      console.log(`Starting with the latest block at ${this.options.latestBlockHash}`)
+      var block = this.getBlock(this.options.latestBlockHash)
+      block.validateChain()
+      this._latestBlock = block
     }
   }
 
