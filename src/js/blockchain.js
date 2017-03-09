@@ -191,6 +191,8 @@ class Block extends Node {
     this.getPayload()
 
     this._validatedChain = false
+    this._chainLength = null
+    this._chainLuck = null
   }
 
   getPayloadLink() {
@@ -221,42 +223,14 @@ class Block extends Node {
     return this.getPayload().getParent()
   }
 
-  _computeChainLength() {
-    assert(this._validatedChain, "_computeChainLength on non-validated chain")
-
-    var length = 1
-    var parent = this.getParent()
-    if (parent) {
-      length += parent.getChainLength()
-    }
-    return length
-  }
-
   getChainLength() {
-    // Using == on purpose.
-    if (this._chainLength == null) {
-      this._chainLength = this._computeChainLength()
-    }
+    assert(this._validatedChain, "computeChainLength on non-validated chain")
 
     return this._chainLength
   }
 
-  _computeChainLuck() {
-    assert(this._validatedChain, "_computeChainLuck on non-validated chain")
-
-    var luck = this.getLuck()
-    var parent = this.getParent()
-    if (parent) {
-      luck += parent.getChainLuck()
-    }
-    return luck
-  }
-
   getChainLuck() {
-    // Using == on purpose.
-    if (this._chainLuck == null) {
-      this._chainLuck = this._computeChainLuck()
-    }
+    assert(this._validatedChain, "computeChainLuck on non-validated chain")
 
     return this._chainLuck
   }
@@ -266,16 +240,19 @@ class Block extends Node {
       return
     }
 
+    var block
     var allSize = this.getCumulativeSize()
     var lastReported = new Date()
     var reported = false
 
     try {
+      var chain = []
+
       // We can stop if we reached any block which has had its chain validated.
-      for (var parent = this.getParent(); parent && !parent._validatedChain; parent = parent.getParent()) {
+      for (block = this.getParent(); block && !block._validatedChain; block = block.getParent()) {
         // If during processing of a chain we get to another chain being processed,
         // we wait for that one to finish first.
-        var uniqueId = `_onBlock/${parent.address}`
+        var uniqueId = `_onBlock/${block.address}`
         var guards = this.blockchain._guards
         if (guards[uniqueId]) {
           guards[uniqueId].exit(guards[uniqueId].enter())
@@ -284,24 +261,49 @@ class Block extends Node {
           }
         }
 
-        // If we waited for the parent's chain to be processed, it is now validated and we can break.
-        if (parent._validatedChain) {
+        // If we waited for the block's chain to be processed, it is now validated and we can break.
+        if (block._validatedChain) {
           break
         }
+
+        chain.push(block)
 
         var timestamp = new Date()
         if (timestamp.valueOf() - lastReported.valueOf() > 120 * 1000) { // ms
           reported = true
           lastReported = timestamp
-          var sizeProcessed = allSize - (parent.getCumulativeSize() - parent.getBlockSize() - parent.getPayload().getBlockSize())
+          var sizeProcessed = allSize - (block.getCumulativeSize() - block.getBlockSize() - block.getPayload().getBlockSize())
           console.log(`Processing chain ${this.address}, ${sizeProcessed} of ${allSize} bytes, ${Math.round(sizeProcessed / allSize * 10000) / 100}%`)
         }
       }
 
       // We got to the end of the chain, or to an already validated chain. We can
-      // now mark all blocks until there as having a validated chain validated as well.
-      for (var parent = this.getParent(); parent && !parent._validatedChain; parent = parent.getParent()) {
-        parent._validatedChain = true
+      // now mark all blocks until there as having a validated chain validated as well,
+      // and compute chain luck and chain length.
+
+      if (chain.length) {
+        var currentLength = 0
+        var currentLuck = 0
+        var lastBlock = chain[chain.length - 1]
+
+        if (lastBlock.getParentLink()) {
+          currentLength = lastBlock.getParent().getChainLength()
+          currentLuck = lastBlock.getParent().getChainLuck()
+        }
+
+        for (var i = chain.length - 1; i >= 0; i--) {
+          block = chain[i]
+
+          assert(!block._validatedChain, "block._validatedChain already set")
+
+          currentLength += 1
+          currentLuck += block.getLuck()
+
+          block._chainLength = currentLength
+          block._chainLuck = currentLuck
+          block._validatedChain = true
+        }
+
       }
 
       if (reported) {
@@ -317,6 +319,12 @@ class Block extends Node {
       throw error
     }
 
+    block = this.getParent()
+
+    assert(!this._validatedChain, "this._validatedChain already set")
+
+    this._chainLength = (block ? block.getChainLength() : 0) + 1
+    this._chainLuck = (block ? block.getChainLuck() : 0) + this.getLuck()
     this._validatedChain = true
   }
 
