@@ -7,7 +7,6 @@ var socket = io();
 class AppActions {
   constructor() {
     this.generateActions(
-      'flipOrder',
       'getChainSuccess',
       'getChainFail',
       'getChainLengthSuccess',
@@ -24,8 +23,8 @@ class AppActions {
     );
   }
 
-  getChain() {
-    socket.emit('chain', {limit: this.alt.stores.AppStore.state.blocksLimit, decreasing: this.alt.stores.AppStore.state.blocksDecreasing});
+  getChain(limit) {
+    socket.emit('chain', {limit: limit});
   }
 
   getChainLength() {

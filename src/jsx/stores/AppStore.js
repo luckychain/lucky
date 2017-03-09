@@ -7,19 +7,12 @@ class AppStore {
     this.sortDown = true;
     this.blocks = [];
     this.blocksHasMore = true;
-    this.blocksLimit = 100;
-    this.blocksDecreasing = true;
     this.chainLength = 0;
     this.peers = [];
     this.transactions = [];
     this.blockchainId = null;
     this.addTransactionState = '';
     this.addTransactionHelp = '';
-  }
-
-  onFlipOrder() {
-    this.blocksDecreasing = !this.blocksDecreasing;
-    AppActions.getChain()
   }
 
   onGetChainSuccess(data) {

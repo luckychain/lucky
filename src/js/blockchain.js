@@ -468,40 +468,23 @@ class Blockchain {
     return Array.from(this.peers.values())
   }
 
-  getChain(limit, decreasing) {
+  getChain(limit) {
     var chain = []
-    var block
     var hasMore = false
-    if (decreasing) {
-      block = this._latestBlock
-      for (var i = 0; block && i < limit; i++) {
-        var json = block.toJSON()
-        json.Hash = block.address
-        json.Data = JSON.parse(json.Data)
-        json.Links[0].Content = block.getPayload().toJSON()
-        chain.push(json)
-        block = block.getParent()
-      }
-      if (block && block.getParentLink()) {
-        hasMore = true
-      }
+
+    var block = this._latestBlock
+    for (var i = 0; block && i < limit; i++) {
+      var json = block.toJSON()
+      json.Hash = block.address
+      json.Data = JSON.parse(json.Data)
+      json.Links[0].Content = block.getPayload().toJSON()
+      chain.push(json)
+      block = block.getParent()
     }
-    else {
-      block = this._latestBlock
-      while (block) {
-        var json = block.toJSON()
-        json.Hash = block.address
-        json.Data = JSON.parse(json.Data)
-        json.Links[0].Content = block.getPayload().toJSON()
-        chain.push(json)
-        block = block.getParent()
-      }
-      if (chain.length > limit) {
-        hasMore = true
-      }
-      chain.reverse()
-      chain = chain.slice(0, limit)
+    if (block && block.getParentLink()) {
+      hasMore = true
     }
+
     return {
       chain: chain,
       hasMore: hasMore
@@ -552,9 +535,8 @@ class Blockchain {
 
       socket.on('chain', FiberUtils.in((args) => {
         var limit = args && args.limit && parseInt(args.limit) || 100
-        var decreasing = !args || args.decreasing !== false
-        if (_.isFinite(limit) && limit > 0 && _.isBoolean(decreasing)) {
-          socket.emit('chainResult', this.getChain(limit, decreasing))
+        if (_.isFinite(limit) && limit >= 0) {
+          socket.emit('chainResult', this.getChain(limit))
         }
       }, this, this._handleErrors))
 
@@ -581,9 +563,8 @@ class Blockchain {
 
     this.node.get("/api/v0/chain", FiberUtils.in((req, res, next) => {
       var limit = req.query.limit && parseInt(req.query.limit) || 100
-      var decreasing = req.query.decreasing !== "false"
-      if (_.isFinite(limit) && limit > 0 && _.isBoolean(decreasing)) {
-        res.status(200).json(this.getChain(limit, decreasing))
+      if (_.isFinite(limit) && limit >= 0) {
+        res.status(200).json(this.getChain(limit))
       }
       else {
         res.status(400).json({error: "invalid"})
