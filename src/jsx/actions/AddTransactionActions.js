@@ -1,45 +1,40 @@
 import alt from '../alt';
-import request from 'request';
+import 'whatwg-fetch';
 
 class AddTransactionActions {
   constructor() {
     this.generateActions(
       'addTransactionSuccess',
       'addTransactionFail',
-      'emptyTx',
-      'invalidPayload'
+      'emptyTx'
     );
   }
 
-  addTransaction(data, txType) {
-    var baseURL = window.location.protocol + "//" + window.location.host;
-
-    var addTransactionActions = this;
-
-    var transaction = {
-      type: txType,
-      data: data
-    };
-
-    request({
-      url: baseURL + '/api/v0/tx',
+  addTransaction(type, data) {
+    fetch('/api/v0/tx', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(transaction)
-    }, function(error, response, body) {
-      if (response && response.statusCode === 200) {
-        console.log(response);
-        addTransactionActions.actions.addTransactionSuccess(response.body);
+      body: JSON.stringify({
+        type: type,
+        data: data
+      })
+    }).then((response) => {
+      if (response.status === 200) {
+        return response.text();
       }
       else {
-        console.log(body);
-        addTransactionActions.actions.addTransactionFail(body);
+        return response.text().then((text) => {
+          throw new Error(text);
+        });
       }
+    }).then((text) => {
+      this.actions.addTransactionSuccess(text);
+    }).catch((error) => {
+      this.actions.addTransactionFail(`${error}`);
     });
   }
-
 }
 
 export default alt.createActions(AddTransactionActions);

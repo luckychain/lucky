@@ -37,6 +37,7 @@
     "socket.io": "^1.7.1",
     "socket.io-client": "^1.7.1",
     "underscore": "^1.8.3",
+    "whatwg-fetch": "^2.0.3",
     "yargs": "^7.0.1"
   },
   "engines": {

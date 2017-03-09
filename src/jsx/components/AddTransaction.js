@@ -56,7 +56,7 @@ class AddTransaction extends React.Component {
     //} else if (!this.validTransactionPayload(tx)) {
     //  AddTransactionActions.invalidPayload();
     } else {
-      AddTransactionActions.addTransaction(tx, txType);
+      AddTransactionActions.addTransaction(txType, tx);
     }
   }
 
