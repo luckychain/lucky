@@ -340,19 +340,28 @@ class Block extends Node {
 
   pinChain(previousLatestBlock) {
     FiberUtils.synchronize(this.blockchain, 'pinChain', () => {
-      var previousChainIDs = []
-      while (previousLatestBlock) {
-        previousChainIDs.push(previousLatestBlock.address)
-        previousChainIDs.push(previousLatestBlock.getPayloadLink())
-        previousLatestBlock = previousLatestBlock.getParent()
-      }
-
       var newChainIDs = []
+      var previousChainIDs = []
+
       var block = this
-      while (block) {
-        newChainIDs.push(block.address)
-        newChainIDs.push(block.getPayloadLink())
-        block = block.getParent()
+      // We iterate over both chains together because often at some point they share a block.
+      while (block || previousLatestBlock) {
+        if (block) {
+          newChainIDs.push(block.address)
+          newChainIDs.push(block.getPayloadLink())
+          block = block.getParent()
+        }
+
+        if (previousLatestBlock) {
+          previousChainIDs.push(previousLatestBlock.address)
+          previousChainIDs.push(previousLatestBlock.getPayloadLink())
+          previousLatestBlock = previousLatestBlock.getParent()
+        }
+
+        // We found a point where chains share a block. We do not have to continue.
+        if (_.intersection(newChainIDs, previousChainIDs)) {
+          break
+        }
       }
 
       var add = _.difference(newChainIDs, previousChainIDs)
