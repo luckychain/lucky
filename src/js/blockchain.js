@@ -293,12 +293,12 @@ class Block extends Node {
 
       // Cover the edge case for a genesis block.
       if (!parentBlock) {
-        assert(!this.getParentLink(), "No parent but parent link")
+        assert(!childBlock.getParentLink(), "No parent but parent link")
 
-        if (this.getChainLength() !== 1) {
+        if (childBlock.getChainLength() !== 1) {
           throw new Error("Genesis block's chain length is not 1")
         }
-        if (this.getChainLuck() !== this.getLuck()) {
+        if (childBlock.getChainLuck() !== childBlock.getLuck()) {
           throw new Error("Genesis block's chain luck is not its luck")
         }
       }
