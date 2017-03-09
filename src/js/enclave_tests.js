@@ -45,7 +45,9 @@ var PREVIOUS_BLOCK = {
     Luck: 0.4,
     Proof: "<TEE signature>",
     Time: new Date("2017-03-05T11:02:28.771Z"),
-    MinerId: "QmULgY72aAJ4W7Nxb2qpxAGQXsFCFfaQc9qgAsmkvx8YPS"
+    MinerId: "QmULgY72aAJ4W7Nxb2qpxAGQXsFCFfaQc9qgAsmkvx8YPS",
+    ChainLength: 42,
+    ChainLuck: 31.6248759567916
   }),
   Links: [{
     Name: "payload",
@@ -66,7 +68,7 @@ var NEW_PAYLOAD = {
     Size: 221
   }, {
     Name: "parent",
-    Hash: "QmRFUSS8Jbs7wnJrcRPRDJ8xPyiw5EXD5vFPwruDfDuVZa", // PREVIOUS_BLOCK
+    Hash: "QmPtFHfRKM26QqR1HQkqwy4h5VRty89gDjZkPCWYFo4DWp", // PREVIOUS_BLOCK
     Size: 1008
   }]
 }
