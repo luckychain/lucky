@@ -13,6 +13,8 @@ class AppStore {
     this.peers = [];
     this.transactions = [];
     this.blockchainId = null;
+    this.addTransactionState = '';
+    this.addTransactionHelp = '';
   }
 
   onFlipOrder() {
@@ -39,6 +41,21 @@ class AppStore {
 
   onGetBlockchainIdSuccess(data) {
     this.blockchainId = data;
+  }
+
+  onAddTransactionSuccess(data) {
+    this.addTransactionState = 'has-success';
+    this.addTransactionHelp = data;
+  }
+
+  onAddTransactionFail(data) {
+    this.addTransactionState = 'has-error';
+    this.addTransactionHelp = data;
+  }
+
+  onEmptyTransaction() {
+    this.addTransactionState = 'has-error';
+    this.addTransactionHelp = "Please enter data or address.";
   }
 }
 

@@ -33,7 +33,14 @@ class App extends React.Component {
     return (
       <div>
         <Navbar blockchainId={this.state.blockchainId} transactions={this.state.transactions} peers={this.state.peers} chainLength={this.state.chainLength} />
-        <div className="content">{React.cloneElement(this.props.children, {blocks: this.state.blocks, peers: this.state.peers, transactions: this.state.transactions, sortDown: this.state.sortDown})}</div>
+        <div className="content">{React.cloneElement(this.props.children, {
+          blocks: this.state.blocks,
+          peers: this.state.peers,
+          transactions: this.state.transactions,
+          sortDown: this.state.sortDown,
+          addTransactionState: this.state.addTransactionState,
+          addTransactionHelp: this.state.addTransactionHelp
+        })}</div>
         <Footer/>
       </div>
     );

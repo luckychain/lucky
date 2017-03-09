@@ -1,5 +1,6 @@
 import alt from '../alt';
 import io from 'socket.io-client';
+import 'whatwg-fetch';
 
 var socket = io();
 
@@ -16,7 +17,10 @@ class AppActions {
       'getPendingTransactionsSuccess',
       'getPendingTransactionsFail',
       'getBlockchainIdSuccess',
-      'getBlockchainIdFail'
+      'getBlockchainIdFail',
+      'addTransactionSuccess',
+      'addTransactionFail',
+      'emptyTransaction'
     );
   }
 
@@ -38,6 +42,32 @@ class AppActions {
 
   getBlockchainId() {
     socket.emit('id');
+  }
+
+  addTransaction(type, data) {
+    fetch('/api/v0/tx', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        type: type,
+        data: data
+      })
+    }).then((response) => {
+      if (response.status === 200) {
+        return response.text();
+      }
+      else {
+        return response.text().then((text) => {
+          throw new Error(text);
+        });
+      }
+    }).then((text) => {
+      this.actions.addTransactionSuccess(text);
+    }).catch((error) => {
+      this.actions.addTransactionFail(`${error}`);
+    });
   }
 }
 
