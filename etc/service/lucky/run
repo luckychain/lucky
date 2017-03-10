@@ -1,0 +1,3 @@
+#!/bin/bash -e
+
+exec chpst -u lucky:lucky /usr/local/bin/node /lucky/src/js/server.js 2>&1

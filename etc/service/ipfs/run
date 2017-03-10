@@ -1,0 +1,10 @@
+#!/bin/bash -e
+
+mkdir -p /ifps
+chown ipfs:ipfs /ifps
+
+export IPFS_PATH=/ifps
+
+chpst -u ipfs:ipfs /usr/local/bin/ipfs init --empty-repo 2>&1 || true
+
+exec chpst -u ipfs:ipfs /usr/local/bin/ipfs daemon --init --migrate --enable-gc --enable-pubsub-experiment 2>&1

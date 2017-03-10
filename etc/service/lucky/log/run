@@ -1,0 +1,6 @@
+#!/bin/bash -e
+
+mkdir -p /var/log/lucky
+chown nobody:nogroup /var/log/lucky
+
+exec chpst -u nobody:nogroup svlogd -tt /var/log/lucky
