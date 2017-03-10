@@ -359,7 +359,7 @@ class Block extends Node {
         }
 
         // We found a point where chains share a block. We do not have to continue.
-        if (_.intersection(newChainIDs, previousChainIDs)) {
+        if (_.intersection(newChainIDs, previousChainIDs).length) {
           break
         }
       }
