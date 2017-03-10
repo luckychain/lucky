@@ -11,7 +11,8 @@ Check out its [web interface](https://lucky.tnode.com/) to see it in action.
 
 **Warning: This is a prototype. Do not use it yet for anything important.**
 
-Current implementation uses mock SGX implementation. Help finalizing the NPM package with full SGX support is welcome.
+Current implementation uses mock SGX implementation. Help finalizing the
+[NPM package with full SGX support is welcome](https://github.com/luckychain/node-secureworker).
 
 ## Build guide
 
