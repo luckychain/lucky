@@ -42,7 +42,7 @@ class Home extends React.Component {
       <Grid>
         <Row>
           <Col sm={12}>
-            <Panel className={this.props.blocks.length ? 'not-empty' : ''} header={(<h4>Blockchain</h4>)}>
+            <Panel className={this.props.blocks.length ? 'not-empty' : ''} header={(<h4>Blocks</h4>)}>
               <InfiniteScroll pageStart={0} loadMore={this.loadBlocks.bind(this)} hasMore={this.props.blocksHasMore} loader={loader}>
                 <PanelGroup accordion>
                   {
