@@ -1,6 +1,7 @@
 # Luckychain
 
-Luckychain is a blockchain layered on top of [IPFS](https://ipfs.io/). It uses [Intel SGX](https://software.intel.com/en-us/sgx)
+Luckychain is a blockchain [layered on top](http://mitar.tnode.com/post/146227562556/towards-layered-re-decentralized-web)
+of [IPFS](https://ipfs.io/). It uses [Intel SGX](https://software.intel.com/en-us/sgx)
 capabilities of modern CPUs for Proof of Luck consensus algorithm which allows energy efficient mining.
 Transactions can reference arbitrary data of practically unlimited size. A new block is mined on
 average every 13 seconds. It is written in JavaScript and uses a [NPM package which allows programs
