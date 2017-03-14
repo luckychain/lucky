@@ -33,7 +33,7 @@
     "react-router": "^3.0.0",
     "react-textarea-autosize": "^4.0.5",
     "request": "^2.72.0",
-    "secureworker": "git://github.com/lucky-chain/node-secureworker.git#a69111f5ff186f00069f854b2c8336bf872199ee",
+    "secureworker": "git://github.com/luckychain/node-secureworker.git#1870d58c39ee347fa497f9dcc70835150b20d746",
     "socket.io": "^1.7.1",
     "socket.io-client": "^1.7.1",
     "underscore": "^1.8.3",

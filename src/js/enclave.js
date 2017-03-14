@@ -18,7 +18,7 @@ module.exports = function enclaveConstructor() {
   // potentially prepare the environment and configure necessary things.
   var SecureWorker = require('./secureworker')
 
-  var secureWorker = new SecureWorker('lucky-chain.js')
+  var secureWorker = new SecureWorker('luckychain.so', 'luckychain.js')
 
   function afterSleep(callback) {
     var requestId = randomId()
@@ -36,7 +36,8 @@ module.exports = function enclaveConstructor() {
       }
 
       try {
-        var quote = SecureWorker.getQuote(report)
+        // TODO: Pass real spid.
+        var quote = SecureWorker.getQuote(report, false, new ArrayBuffer(16))
         var attestation = SecureWorker.getRemoteAttestation(quote)
       }
       catch (error) {
@@ -160,6 +161,10 @@ module.exports = function enclaveConstructor() {
 
     teeValidateRemoteAttestation: function (quote, attestation) {
       return SecureWorker.validateRemoteAttestation(quote, attestation)
+    },
+
+    teeVersion: function () {
+      return SecureWorker.getSGXVersion()
     }
   }
 

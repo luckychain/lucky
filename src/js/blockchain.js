@@ -17,7 +17,7 @@ var enclaveInstance = null
 var DAGNodeCreateSync = FiberUtils.wrap(dagPB.DAGNode.create)
 
 var ROUND_TIME = 10 // seconds
-var BLOCKCHAIN_ID = "lucky-chain-0.1"
+var BLOCKCHAIN_ID = "luckychain-0.1"
 
 var DEFAULT_OPTIONS = {
   clientPort: 8000,
@@ -187,8 +187,8 @@ class Block extends Node {
       throw new Error(`Invalid chain luck: ${this.data.ChainLuck}`)
     }
 
-    this.data.Proof.Attestation = new Uint8Array(bs58.decode(this.data.Proof.Attestation)).buffer
-    this.data.Proof.Quote = new Uint8Array(bs58.decode(this.data.Proof.Quote)).buffer
+    this.data.Proof.Attestation = new Uint8Array(bs58.decode(this.data.Proof.Attestation).values()).buffer
+    this.data.Proof.Quote = new Uint8Array(bs58.decode(this.data.Proof.Quote).values()).buffer
     this.data.Time = new Date(this.data.Time)
 
     // Chain could be validated before.
@@ -549,10 +549,9 @@ class Blockchain {
   }
 
   getSGXVersion() {
-    // TODO: We should return SGX version (version of platform, enclave, etc.). And null for mock.
     // TODO: We should pass this as part of the node's ID, and make it available as part of peers' ID.
     //       See: https://github.com/ipfs/notes/issues/227
-    return null
+    return enclaveInstance.teeVersion()
   }
 
   _getIPFSInfo() {
