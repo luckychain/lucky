@@ -40,7 +40,7 @@ function deserialize(string) {
     data = newData
   }
   else if (data.$type === 'ArrayBuffer') {
-    data = new Uint8Array(bs58.decode(data.data)).buffer
+    data = new Uint8Array(bs58.decode(data.data).values()).buffer
   }
 
   return data
