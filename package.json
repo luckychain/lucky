@@ -1,6 +1,6 @@
 {
   "name": "lucky-js",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "main": "./src/js/server.js",
   "scripts": {
     "start": "make && node ./src/js/server.js"
