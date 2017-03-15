@@ -1,9 +1,9 @@
 #!/bin/bash -e
 
-mkdir -p /ifps
-chown ipfs:ipfs /ifps
+mkdir -p /ipfs
+chown ipfs:ipfs /ipfs
 
-export IPFS_PATH=/ifps
+export IPFS_PATH=/ipfs
 
 chpst -u ipfs:ipfs /usr/local/bin/ipfs init --empty-repo 2>&1 || true
 
