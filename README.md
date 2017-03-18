@@ -70,6 +70,7 @@ SysTEX '16 Proceedings of the 1st Workshop on System Software for Trusted Execut
 Available at:
 
 * https://dl.acm.org/citation.cfm?id=3007790
+* https://arxiv.org/abs/1703.05435
 
 Abstract:
 
