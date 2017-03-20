@@ -71,6 +71,7 @@ Available at:
 
 * https://dl.acm.org/citation.cfm?id=3007790
 * https://arxiv.org/abs/1703.05435
+* https://eprint.iacr.org/2017/249
 
 Abstract:
 
