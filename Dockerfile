@@ -1,4 +1,4 @@
-FROM tozd/sgx:ubuntu-trusty
+FROM tozd/sgx:ubuntu-xenial
 
 EXPOSE 4001/tcp
 EXPOSE 4002/udp
