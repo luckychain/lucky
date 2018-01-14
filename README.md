@@ -6,8 +6,6 @@ capabilities of modern CPUs for Proof of Luck consensus algorithm which allows e
 Transactions can reference arbitrary data of practically unlimited size. A new block is mined on
 average every 13 seconds. It is written in JavaScript and uses a [NPM package which allows running JavaScript in SGX enclaves](https://github.com/luckychain/node-secureworker).
 
-Check out its [web interface](https://lucky.tnode.com/) to see it in action.
-
 **Warning: This is a prototype. Do not use it yet for anything important.**
 
 Current implementation uses mock SGX implementation without any of the security assurances of the SGX platform.
