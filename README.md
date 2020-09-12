@@ -56,7 +56,7 @@ Open the web interface at [http://localhost:8000](http://localhost:8000).
 You can use [Docker to run Luckychain](https://hub.docker.com/r/luckychain/luckychain/):
 
 ```
-docker run -d -p 4001:4001/tcp -p 4002:4002/udp -p 8000:8000/tcp --name luckychain luckychain/luckychain
+docker run -d -p 4001:4001/tcp -p 4002:4002/udp -p 8000:8000/tcp --name luckychain luckychain/luckychain:master
 ```
 
 ## Whitepaper
